@@ -1,0 +1,29 @@
+# Order matters!
+- path: users
+  insert:
+    at_index: 1
+    items:
+      - 'id': 3
+        'firstname': 'Foo'
+        'Lastname': 'Bar'
+        'status': 'Insert'
+- path: users
+  append:
+    items:
+      - 'id': 2
+        'firstname': 'Foo-Append'
+        'Lastname': 'Bar'
+        'status': 'Append'
+- path: users
+  prepend:
+    items:
+      - 'id': 3
+        'firstname': 'Foo'
+        'Lastname': 'Bar'
+        'status': 'Prepend'
+- path: users
+  merge:
+    at_index: 4
+    items:
+      - 'id': 10
+        'status': 'Merged'
