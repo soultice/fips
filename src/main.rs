@@ -119,13 +119,13 @@ async fn make_hyper_request(url: &str) -> Result<Response<Body>, hyper::Error> {
 
 async fn moxy<'r>(
     path: &str,
-    rocket_headers: HyperRequestInfo,
-    rocket_info: Arc<RocketInfo>,
+    hypper_request_info: HyperRequestInfo,
+    info: Arc<RocketInfo>,
 ) -> Option<String> {
     let config = get_config().unwrap();
 
-    let mut lock = rocket_info.messages.lock().unwrap().push(PrintInfo {
-        method: rocket_headers.method.as_str().to_owned(),
+    info.messages.lock().unwrap().push(PrintInfo {
+        method: hypper_request_info.method.as_str().to_owned(),
         path: path.to_owned(),
     });
 
