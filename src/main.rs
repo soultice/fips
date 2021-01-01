@@ -1,33 +1,25 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
-#![deny(warnings)]
-use futures::TryStreamExt as _;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
-
 #[macro_use]
-extern crate rocket;
 extern crate json_patch;
-extern crate reqwest;
 extern crate serde_json;
 extern crate serde_yaml;
 
+use hyper::service::{make_service_fn, service_fn};
+use hyper::Client;
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
+
 use json_patch::merge;
 use regex::RegexSet;
-use reqwest::header::{HeaderName, HeaderValue};
-use rocket::{
-    http::{Method, Status},
-    request::{FromRequest, Outcome, Request},
-    tokio::runtime::Runtime,
-    State,
-};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{convert::TryFrom, path::PathBuf};
 
+use tokio::runtime::Runtime;
+
 mod demo;
 mod util;
 
+use hyper::body::Buf;
 use crate::demo::{ui, App};
 use argh::FromArgs;
 use crossterm::{
@@ -100,34 +92,14 @@ fn get_config() -> Result<Vec<Rule>, Box<dyn Error>> {
     Ok(d)
 }
 
-struct RocketRequestInfo {
-    headers: reqwest::header::HeaderMap,
+struct HyperRequestInfo {
+    headers: hyper::header::HeaderMap,
     method: Method,
 }
 
 #[derive(Debug)]
 enum HeadersConversionError {
     Generic,
-}
-
-#[rocket::async_trait]
-impl<'a, 'r> FromRequest<'a, 'r> for RocketRequestInfo {
-    type Error = HeadersConversionError;
-
-    async fn from_request(request: &'a Request<'r>) -> Outcome<Self, Self::Error> {
-        let headers = request.headers();
-        let mut reqw_headers = reqwest::header::HeaderMap::new();
-        for header in headers.iter() {
-            reqw_headers.append(
-                HeaderName::try_from(&header.name().to_owned().to_string()).unwrap(),
-                HeaderValue::try_from(&header.value().to_owned().to_string()).unwrap(),
-            );
-        }
-        Outcome::Success(RocketRequestInfo {
-            headers: reqw_headers,
-            method: request.method(),
-        })
-    }
 }
 
 struct RocketInfo {
@@ -139,39 +111,29 @@ struct PrintInfo {
     path: String,
 }
 
-async fn make_request(
-    method: &str,
-    path: &str,
-    headers: reqwest::header::HeaderMap,
-) -> Result<reqwest::Response, reqwest::Error> {
-    let client = reqwest::Client::new();
-    let resp: Result<reqwest::Response, reqwest::Error> = client
-        .request(reqwest::Method::from_str(method).unwrap(), path)
-        .headers(headers)
-        .send()
-        .await;
-    return resp;
+async fn make_hyper_request(url: &str) -> Result<Response<Body>, hyper::Error> {
+    let client = Client::new();
+    let req = hyper::Request::builder().method("GET").uri("http://localhost:3000/users").body(Body::from("")).unwrap();
+    client.request(req).await
 }
 
 async fn moxy<'r>(
-    path: PathBuf,
-    rocket_headers: RocketRequestInfo,
-    rocket_info: State<'r, Arc<RocketInfo>>,
+    path: &str,
+    rocket_headers: HyperRequestInfo,
+    rocket_info: Arc<RocketInfo>,
 ) -> Option<String> {
     let config = get_config().unwrap();
-    let str_path = path.to_str().unwrap();
 
     let mut lock = rocket_info.messages.lock().unwrap().push(PrintInfo {
         method: rocket_headers.method.as_str().to_owned(),
-        path: str_path.to_owned(),
+        path: path.to_owned(),
     });
 
-    let url_path = format!("http://localhost:3000/{}", path.to_str()?);
+    let url_path = format!("http://localhost:3000/{}", path.to_owned());
 
-    let resp = make_request(rocket_headers.method.as_str(), &url_path, rocket_headers.headers).await.ok()?;
-    let resp_body = resp.text().await.ok()?;
-
-    let mut resp_json: serde_json::Value = serde_json::from_str(&resp_body).ok()?;
+    let mut res = make_hyper_request("http://localhost:3000/users").await.unwrap();
+    let body = hyper::body::aggregate(res).await.unwrap();
+    let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).expect("could not unwrap body");
 
     let mut path_regex: Vec<String> = Vec::new();
 
@@ -181,7 +143,7 @@ async fn moxy<'r>(
 
     let set = RegexSet::new(&path_regex).unwrap();
 
-    let matches: Vec<_> = set.matches(str_path).into_iter().collect();
+    let matches: Vec<_> = set.matches(path).into_iter().collect();
 
     for idx in matches.iter() {
         if config[*idx].insert.is_some() {
@@ -230,27 +192,9 @@ async fn moxy<'r>(
     Some(serde_json::to_string(&resp_json).ok()?)
 }
 
-#[get("/<path..>")]
-async fn get_mock<'r>(
-    path: PathBuf,
-    rocket_headers: RocketRequestInfo,
-    rocket_info: State<'r, Arc<RocketInfo>>,
-) -> Option<String> {
-    return moxy(path, rocket_headers, rocket_info).await;
-}
-
-#[post("/<path..>")]
-async fn post_mock<'r>(
-    path: PathBuf,
-    rocket_headers: RocketRequestInfo,
-    rocket_info: State<'r, Arc<RocketInfo>>,
-) -> Option<String> {
-    return moxy(path, rocket_headers, rocket_info).await;
-}
-
 /// This is our service handler. It receives a Request, routes on its
 /// path, and returns a Future of a Response.
-async fn echo(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
+async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
         (&Method::GET, "/") => Ok(Response::new(Body::from(
@@ -265,10 +209,12 @@ async fn echo(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
         }
 
         _ => {
-            println!("route not found {}", req.uri().path());
-            let mut not_found = Response::default();
-            *not_found.status_mut() = StatusCode::NOT_FOUND;
-            Ok(not_found)
+            //let mut not_found = Response::default();
+            let hyper_info = HyperRequestInfo{ headers: req.headers().to_owned(), method: req.method().to_owned() };
+            let resp = moxy(req.uri().path(), hyper_info, info).await.unwrap();
+            //*not_found.status_mut() = StatusCode::NOT_FOUND;
+            //Ok(not_found)
+            Ok(Response::new(Body::from(resp)))
         }
     }
 }
@@ -281,22 +227,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         messages: Mutex::new(Vec::new()),
     });
 
-    rt.spawn(
-        rocket::ignite()
-            .mount("/", routes![get_mock])
-            .mount("/", routes![post_mock])
-            .manage(Arc::clone(&cfg))
-            .launch(),
-    );
+    let addr = ([127, 0, 0, 1], 8000).into();
 
-    let addr = ([127, 0, 0, 1], 3001).into();
+    let foo = Arc::clone(&cfg);
+    let make_svc = make_service_fn(move |_| {
+        let onion1 = Arc::clone(&foo);
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+                let onion2 = Arc::clone(&onion1);
+                async move { echo(req, onion2).await }
+            }))
+        }
+    });
 
-    let service = make_service_fn(|_| async { Ok::<_, hyper::Error>(service_fn(echo)) });
-
-    rt.spawn(
-        let server = Server::bind(&addr).serve(service);
-    );
-
+    rt.spawn(Server::bind(&addr).serve(make_svc));
 
     let cli: Cli = argh::from_env();
 
@@ -334,9 +278,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     terminal.clear()?;
 
-    let test = String::from("");
-    let mut practical_note = Note { text: test };
-
     loop {
         let spans: Vec<Spans> = cfg
             .messages
@@ -365,7 +306,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     terminal.show_cursor()?;
                     break;
                 }
-                KeyCode::Char(c) => practical_note.text += &c.to_string(),
+                KeyCode::Char(c) => {}
                 KeyCode::Left => app.on_left(),
                 KeyCode::Up => app.on_up(),
                 KeyCode::Right => app.on_right(),
