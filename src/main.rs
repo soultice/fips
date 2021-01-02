@@ -2,10 +2,12 @@
 extern crate json_patch;
 extern crate serde_json;
 extern crate serde_yaml;
+extern crate bytes;
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Client;
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use futures::TryStreamExt; // 0.3.7
 
 use json_patch::merge;
 use regex::RegexSet;
@@ -40,6 +42,9 @@ use tui::{
     text::{Span, Spans},
     Terminal,
 };
+use std::borrow::Borrow;
+use std::ops::Deref;
+use hyper::http::HeaderValue;
 
 enum Event<I> {
     Input(I),
@@ -92,11 +97,6 @@ fn get_config() -> Result<Vec<Rule>, Box<dyn Error>> {
     Ok(d)
 }
 
-struct HyperRequestInfo {
-    headers: hyper::header::HeaderMap,
-    method: Method,
-}
-
 #[derive(Debug)]
 enum HeadersConversionError {
     Generic,
@@ -109,31 +109,30 @@ struct RocketInfo {
 struct PrintInfo {
     method: String,
     path: String,
-}
-
-async fn make_hyper_request(url: &str) -> Result<Response<Body>, hyper::Error> {
-    let client = Client::new();
-    let req = hyper::Request::builder().method("GET").uri("http://localhost:3000/users").body(Body::from("")).unwrap();
-    client.request(req).await
+    matching_rules: usize,
+    response_code: String,
 }
 
 async fn moxy<'r>(
-    path: &str,
-    hypper_request_info: HyperRequestInfo,
+    body: Body,
+    parts: hyper::http::request::Parts,
     info: Arc<RocketInfo>,
-) -> Option<String> {
+) -> Option<Response<Body>> {
     let config = get_config().unwrap();
 
-    info.messages.lock().unwrap().push(PrintInfo {
-        method: hypper_request_info.method.as_str().to_owned(),
-        path: path.to_owned(),
-    });
+    let method = parts.method;
+    let uri = parts.uri;
 
-    let url_path = format!("http://localhost:3000/{}", path.to_owned());
+    let url_path = format!("http://localhost:3000{}", uri.to_string());
 
-    let mut res = make_hyper_request("http://localhost:3000/users").await.unwrap();
-    let body = hyper::body::aggregate(res).await.unwrap();
-    let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).expect("could not unwrap body");
+    let client = Client::new();
+
+    let client_req = hyper::Request::builder().method(method.clone()).uri(&url_path).body(body).unwrap();
+    let client_res = client.request(client_req).await.unwrap();
+    let (mut client_parts, client_body) = client_res.into_parts();
+
+    let body = hyper::body::aggregate(client_body).await.unwrap();
+    let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).unwrap();
 
     let mut path_regex: Vec<String> = Vec::new();
 
@@ -143,7 +142,14 @@ async fn moxy<'r>(
 
     let set = RegexSet::new(&path_regex).unwrap();
 
-    let matches: Vec<_> = set.matches(path).into_iter().collect();
+    let matches: Vec<_> = set.matches(&*uri.to_string()).into_iter().collect();
+
+    info.messages.lock().unwrap().push(PrintInfo {
+        method: method.to_string(),
+        path: uri.to_string(),
+        matching_rules: matches.len(),
+        response_code: client_parts.status.to_string(),
+    });
 
     for idx in matches.iter() {
         if config[*idx].insert.is_some() {
@@ -189,7 +195,11 @@ async fn moxy<'r>(
         }
     }
 
-    Some(serde_json::to_string(&resp_json).ok()?)
+    let final_response_string = serde_json::to_string(&resp_json).unwrap();
+
+    let mut returned_response = Response::from_parts(client_parts, Body::from(final_response_string.clone()));
+    returned_response.headers_mut().insert("content-length", HeaderValue::from_str(&*final_response_string.as_bytes().len().to_string()).unwrap());
+    Some(returned_response)
 }
 
 /// This is our service handler. It receives a Request, routes on its
@@ -197,27 +207,21 @@ async fn moxy<'r>(
 async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
-        (&Method::GET, "/") => Ok(Response::new(Body::from(
-            "Try POSTing data to /echo such as: `curl localhost:3000/echo -XPOST -d 'hello world'`",
+        (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(
+            "",
         ))),
-
-        (&Method::POST, "/echo/reversed") => {
-            let whole_body = hyper::body::to_bytes(req.into_body()).await?;
-
-            let reversed_body = whole_body.iter().rev().cloned().collect::<Vec<u8>>();
-            Ok(Response::new(Body::from(reversed_body)))
-        }
 
         _ => {
             //let mut not_found = Response::default();
-            let hyper_info = HyperRequestInfo{ headers: req.headers().to_owned(), method: req.method().to_owned() };
-            let resp = moxy(req.uri().path(), hyper_info, info).await.unwrap();
+            let (parts, body) = req.into_parts();
+            let resp = moxy(body, parts, info).await.unwrap();
             //*not_found.status_mut() = StatusCode::NOT_FOUND;
             //Ok(not_found)
-            Ok(Response::new(Body::from(resp)))
+            Ok(resp)
         }
     }
 }
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -289,6 +293,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Span::from(x.method.to_owned()),
                     Span::from(" "),
                     Span::from(x.path.to_owned()),
+                    Span::from(" "),
+                    Span::from("Matched Rules: "),
+                    Span::from(" "),
+                    Span::from(x.matching_rules.to_owned().to_string()),
+                    Span::from(" "),
+                    Span::from("Response Code: => "),
+                    Span::from(x.response_code.to_owned()),
                 ])
             })
             .collect();
@@ -303,6 +314,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         LeaveAlternateScreen,
                         DisableMouseCapture
                     )?;
+                    rt.shutdown_background();
                     terminal.show_cursor()?;
                     break;
                 }

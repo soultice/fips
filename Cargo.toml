@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = "1.0.0"
 serde_yaml = "0.8.14"
 serde = "1.0.118"
 serde_json = "1.0.60"

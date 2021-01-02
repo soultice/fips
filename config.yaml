@@ -23,7 +23,7 @@
         'status': 'Prepend'
 - path: users
   merge:
-    at_index: 4
+    at_index: 3
     items:
       - 'id': 10
         'status': 'Merged'
