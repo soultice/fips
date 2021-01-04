@@ -45,6 +45,7 @@ use tui::{
 use std::borrow::Borrow;
 use std::ops::Deref;
 use hyper::http::HeaderValue;
+use std::io::Read;
 
 enum Event<I> {
     Input(I),
@@ -123,16 +124,25 @@ async fn moxy<'r>(
     let method = parts.method;
     let uri = parts.uri;
 
-    let url_path = format!("http://localhost:3000{}", uri.to_string());
+    let url_path = format!("http://localhost:4041{}", uri.to_string());
 
     let client = Client::new();
 
-    let client_req = hyper::Request::builder().method(method.clone()).uri(&url_path).body(body).unwrap();
+    let mut client_req = hyper::Request::builder().method(method.clone()).uri(&url_path).body(body).unwrap();
+    // println!("uri: {:?}, headers: {:?}", uri.to_string(), &parts.headers);
+    client_req.headers_mut().insert("Authorization", parts.headers.get("Authorization").unwrap().clone());
+
     let client_res = client.request(client_req).await.unwrap();
     let (mut client_parts, client_body) = client_res.into_parts();
+    //println!("{:?}", &client_body);
 
     let body = hyper::body::aggregate(client_body).await.unwrap();
-    let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).unwrap();
+    let mut buffer = String::new();
+    body.reader().read_to_string(&mut buffer);
+    // println!("in buffer {:?}", &buffer);
+    //let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).unwrap();
+    let mut resp_json: serde_json::Value = serde_json::from_str(&buffer).unwrap();
+    // println!("in resp_json {:?}", &resp_json);
 
     let mut path_regex: Vec<String> = Vec::new();
 
@@ -199,6 +209,9 @@ async fn moxy<'r>(
 
     let mut returned_response = Response::from_parts(client_parts, Body::from(final_response_string.clone()));
     returned_response.headers_mut().insert("content-length", HeaderValue::from_str(&*final_response_string.as_bytes().len().to_string()).unwrap());
+    returned_response.headers_mut().clear();
+    returned_response.headers_mut().insert("Access-Control-Allow-Origin",  HeaderValue::from_static("*"));
+    returned_response.headers_mut().insert("Access-Control-Allow-Headers",  HeaderValue::from_static("authorization,content-type"));
     Some(returned_response)
 }
 
@@ -211,12 +224,21 @@ async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body
             "",
         ))),
 
+        (&Method::OPTIONS, _) => {
+            let mut new_response = Response::new(Body::from(""));
+            new_response.headers_mut().insert("Access-Control-Allow-Origin",  HeaderValue::from_static("*"));
+            new_response.headers_mut().insert("Access-Control-Allow-Headers",  HeaderValue::from_static("authorization,content-type"));
+            Ok(new_response)
+        },
+
         _ => {
             //let mut not_found = Response::default();
             let (parts, body) = req.into_parts();
             let resp = moxy(body, parts, info).await.unwrap();
+            //<println!("outgoing {:?}", &resp);
             //*not_found.status_mut() = StatusCode::NOT_FOUND;
             //Ok(not_found)
+            // println!("before return {:?}", &resp);
             Ok(resp)
         }
     }
