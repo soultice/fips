@@ -12,7 +12,7 @@ impl<'a> App<'a> {
         App {
             title,
             should_quit: false,
-            tabs: TabsState::new(vec!["Tab0", "Tab1"]),
+            tabs: TabsState::new(vec!["Requests", "Rules"]),
             show_chart: true,
             enhanced_graphics,
         }

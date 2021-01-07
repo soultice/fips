@@ -46,6 +46,8 @@ use std::borrow::Borrow;
 use std::ops::Deref;
 use hyper::http::HeaderValue;
 use std::io::Read;
+use json_dotpath::DotPaths;
+use fake::{ locales::*, faker::name::raw::*, Fake, Faker};
 
 enum Event<I> {
     Input(I),
@@ -71,30 +73,22 @@ fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+struct RuleCollection {
+    path: String,
+    rules: Vec<Rule>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Rule {
     path: String,
-    append: Option<RuleSpecifics>,
-    prepend: Option<RuleSpecifics>,
-    insert: Option<InsertRuleSpecifics>,
-    merge: Option<InsertRuleSpecifics>,
-    delete: Option<RuleSpecifics>,
+    item: Value,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-struct RuleSpecifics {
-    items: Vec<Value>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct InsertRuleSpecifics {
-    at_index: usize,
-    items: Vec<Value>,
-}
-
-fn get_config() -> Result<Vec<Rule>, Box<dyn Error>> {
+fn get_config() -> Result<Vec<RuleCollection>, Box<dyn Error>> {
     let f = std::fs::File::open("config.yaml")?;
-    let d: Vec<Rule> = serde_yaml::from_reader(f)?;
+    let d: Vec<RuleCollection> = serde_yaml::from_reader(f)?;
     Ok(d)
 }
 
@@ -114,12 +108,38 @@ struct PrintInfo {
     response_code: String,
 }
 
+fn recursive_expand(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(val) => {
+            match val.as_str() {
+                "{{Name}}" => {
+                    *val = Name(EN).fake();
+                }
+               _ => {
+               }
+            }
+        },
+        serde_json::Value::Array(val) => {
+            for i in val {
+                recursive_expand(i);
+            }
+        },
+        serde_json::Value::Object(val) => {
+            for (_, i) in val {
+                recursive_expand(i);
+            }
+        },
+        _ => {}
+    }
+}
+
+
 async fn moxy<'r>(
     body: Body,
     parts: hyper::http::request::Parts,
     info: Arc<RocketInfo>,
 ) -> Option<Response<Body>> {
-    let config = get_config().unwrap();
+    let mut config = get_config().unwrap();
 
     let method = parts.method;
     let uri = parts.uri;
@@ -162,46 +182,9 @@ async fn moxy<'r>(
     });
 
     for idx in matches.iter() {
-        if config[*idx].insert.is_some() {
-            match resp_json {
-                serde_json::Value::Array(ref mut typ) => {
-                    for x in config[*idx].insert.as_ref()?.items.iter().rev() {
-                        typ.insert(config[*idx].insert.as_ref()?.at_index, x.to_owned());
-                    }
-                }
-                _ => (),
-            }
-        }
-        if config[*idx].append.is_some() {
-            match resp_json {
-                serde_json::Value::Array(ref mut typ) => {
-                    typ.extend_from_slice(&config[*idx].append.as_ref()?.items)
-                }
-                _ => (),
-            }
-        }
-        if config[*idx].prepend.is_some() {
-            match resp_json {
-                serde_json::Value::Array(ref mut typ) => {
-                    for (i, x) in config[*idx].prepend.as_ref()?.items.iter().enumerate() {
-                        typ.insert(i, x.to_owned());
-                    }
-                }
-                _ => (),
-            }
-        }
-        if config[*idx].merge.is_some() {
-            match resp_json {
-                serde_json::Value::Array(ref mut typ) => {
-                    for x in config[*idx].merge.as_ref()?.items.iter() {
-                        merge(
-                            &mut typ[config[*idx].merge.as_ref()?.at_index],
-                            &x.to_owned(),
-                        );
-                    }
-                }
-                _ => (),
-            }
+        for rule in &mut config[*idx].rules {
+            recursive_expand(&mut rule.item);
+            resp_json.dot_set(&rule.path, rule.item.clone());
         }
     }
 
