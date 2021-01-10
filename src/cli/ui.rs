@@ -1,4 +1,4 @@
-use crate::demo::App;
+use crate::cli::App;
 use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},

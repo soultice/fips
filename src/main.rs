@@ -1,13 +1,19 @@
-#[macro_use]
+#![allow(unused)]
 extern crate json_patch;
 extern crate serde_json;
 extern crate serde_yaml;
 extern crate bytes;
 
+extern crate strum;
+#[macro_use]
+extern crate strum_macros;
+
+mod cli;
+mod util;
+
 use hyper::service::{make_service_fn, service_fn};
-use hyper::Client;
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
-use futures::TryStreamExt; // 0.3.7
+use hyper::{Client, Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue}, header::{HeaderName}};
+use futures::{TryStreamExt, Stream}; // 0.3.7
 
 use json_patch::merge;
 use regex::RegexSet;
@@ -18,11 +24,8 @@ use std::{convert::TryFrom, path::PathBuf};
 
 use tokio::runtime::Runtime;
 
-mod demo;
-mod util;
-
 use hyper::body::Buf;
-use crate::demo::{ui, App};
+use crate::cli::{ui, App};
 use argh::FromArgs;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
@@ -44,17 +47,18 @@ use tui::{
 };
 use std::borrow::Borrow;
 use std::ops::Deref;
-use hyper::http::HeaderValue;
 use std::io::Read;
 use json_dotpath::DotPaths;
-use fake::{ locales::*, faker::name::raw::*, Fake, Faker};
+use fake::{locales::*, faker::name::raw::*, Fake, Faker};
+use std::alloc::{handle_alloc_error};
+use hyper::http::response::Parts;
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-/// Crossterm demo
+/// Crossterm cli
 #[derive(Debug, FromArgs)]
 struct Cli {
     /// time in ms between two ticks.
@@ -73,11 +77,20 @@ fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
 
+#[derive(Debug, Display)]
+enum Mode {
+    PROXY,
+    MOXY,
+    MOCK,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RuleCollection {
     path: String,
-    rules: Vec<Rule>,
+    forwardUri: Option<String>,
+    forwardHeaders: Option<Vec<String>>,
+    backwardHeaders: Option<Vec<String>>,
+    rules: Option<Vec<Rule>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -104,6 +117,7 @@ struct RocketInfo {
 struct PrintInfo {
     method: String,
     path: String,
+    mode: String,
     matching_rules: usize,
     response_code: String,
 }
@@ -115,24 +129,48 @@ fn recursive_expand(value: &mut serde_json::Value) {
                 "{{Name}}" => {
                     *val = Name(EN).fake();
                 }
-               _ => {
-               }
+                _ => {}
             }
-        },
+        }
         serde_json::Value::Array(val) => {
             for i in val {
                 recursive_expand(i);
             }
-        },
+        }
         serde_json::Value::Object(val) => {
             for (_, i) in val {
                 recursive_expand(i);
             }
-        },
+        }
         _ => {}
     }
 }
 
+async fn make_client_request(url_path: &str, method: &Method, forward_headers: Option<Vec<String>>, body: Body, parts: &hyper::http::request::Parts) -> Option<(Parts, serde_json::Value)> {
+    let client = Client::new();
+    let mut client_req = hyper::Request::builder().method(method.clone()).uri(url_path).body(body).unwrap();
+
+    if let Some(forward_headers) = forward_headers {
+        for header_name in forward_headers {
+            //println!("header-name {}", header_name);
+            let header = HeaderName::from_str(&header_name).unwrap();
+            let header_value = parts.headers.get(header_name).unwrap().clone();
+            client_req.headers_mut().insert(header, header_value);
+        }
+    }
+
+    let client_res = client.request(client_req).await.unwrap();
+    let (mut client_parts, client_body) = client_res.into_parts();
+    //println!("{:?}", client_parts.headers);
+    let body = hyper::body::aggregate(client_body).await.unwrap();
+    let mut buffer = String::new();
+    body.reader().read_to_string(&mut buffer);
+    let mut resp_json: serde_json::Value = serde_json::Value::from("");
+    if !buffer.is_empty() {
+        resp_json = serde_json::from_str(&buffer).unwrap();
+    }
+    Some((client_parts, resp_json))
+}
 
 async fn moxy<'r>(
     body: Body,
@@ -141,66 +179,91 @@ async fn moxy<'r>(
 ) -> Option<Response<Body>> {
     let mut config = get_config().unwrap();
 
-    let method = parts.method;
-    let uri = parts.uri;
-
-    let url_path = format!("http://localhost:4041{}", uri.to_string());
-
-    let client = Client::new();
-
-    let mut client_req = hyper::Request::builder().method(method.clone()).uri(&url_path).body(body).unwrap();
-    // println!("uri: {:?}, headers: {:?}", uri.to_string(), &parts.headers);
-    client_req.headers_mut().insert("Authorization", parts.headers.get("Authorization").unwrap().clone());
-
-    let client_res = client.request(client_req).await.unwrap();
-    let (mut client_parts, client_body) = client_res.into_parts();
-    //println!("{:?}", &client_body);
-
-    let body = hyper::body::aggregate(client_body).await.unwrap();
-    let mut buffer = String::new();
-    body.reader().read_to_string(&mut buffer);
-    // println!("in buffer {:?}", &buffer);
-    //let mut resp_json: serde_json::Value = serde_json::from_reader(body.reader()).unwrap();
-    let mut resp_json: serde_json::Value = serde_json::from_str(&buffer).unwrap();
-    // println!("in resp_json {:?}", &resp_json);
+    let method = &parts.method;
+    let uri = &parts.uri;
 
     let mut path_regex: Vec<String> = Vec::new();
-
-    for rule in config.iter() {
+    for rule in &config {
         path_regex.push(rule.path.to_owned())
     }
-
     let set = RegexSet::new(&path_regex).unwrap();
-
     let matches: Vec<_> = set.matches(&*uri.to_string()).into_iter().collect();
+
+    let (mut returned_response, mode) = match matches.len() {
+        0 => {
+            (Response::new(Body::from("no matching rule found")), Mode::PROXY)
+        }
+        _ => {
+            let firstMatchedRule = matches[0];
+            let mode: Mode = match (&config[firstMatchedRule].forwardUri, &config[firstMatchedRule].rules) {
+                (Some(_), Some(_)) => Mode::MOXY,
+                (None, Some(_)) => Mode::MOCK,
+                _ => Mode::PROXY,
+            };
+            let mut returned_response = match mode {
+                Mode::PROXY | Mode::MOXY => {
+                    let mut url_path = String::from("");
+                    if let Some(forward_url) = config[firstMatchedRule].forwardUri.clone() {
+                        url_path.push_str(&forward_url);
+                    }
+                    url_path.push_str(&uri.to_string());
+                    let (mut client_parts, mut resp_json) = make_client_request(&url_path, &method, config[firstMatchedRule].forwardHeaders.clone(), body, &parts).await?;
+
+                    if let Some(rules) = &mut config[firstMatchedRule].rules {
+                        for rule in rules {
+                            recursive_expand(&mut rule.item);
+                            resp_json.dot_set(&rule.path, rule.item.clone());
+                        }
+                    }
+                    let final_response_string = serde_json::to_string(&resp_json).unwrap();
+                    let mut returned_response = Response::from_parts(client_parts, Body::from(final_response_string.clone()));
+                    returned_response
+                }
+                _ => {
+                    let body = match &mut config[firstMatchedRule].rules {
+                        Some(rules) => {
+                            recursive_expand(&mut rules[0].item);
+                            Body::from(serde_json::to_string(&rules[0].item).unwrap())
+                        }
+                        _ => Body::from("")
+                    };
+                    let mut returned_response = Response::new(body);
+                    returned_response
+                }
+            };
+
+            if let Some(backward_headers) = &config[firstMatchedRule].backwardHeaders {
+                let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
+                for header_name in backward_headers {
+                    let header = HeaderName::from_str(&header_name).ok()?;
+                    let header_value = returned_response.headers().get(header_name).unwrap().clone();
+                    header_buffer.push((header, header_value));
+                }
+                returned_response.headers_mut().clear();
+                for header_tup in header_buffer {
+                    returned_response.headers_mut().insert(header_tup.0, header_tup.1);
+                }
+            }
+            (returned_response, mode)
+        }
+    };
 
     info.messages.lock().unwrap().push(PrintInfo {
         method: method.to_string(),
         path: uri.to_string(),
+        mode: mode.to_string(),
         matching_rules: matches.len(),
-        response_code: client_parts.status.to_string(),
+        response_code: returned_response.status().to_string(),
     });
 
-    for idx in matches.iter() {
-        for rule in &mut config[*idx].rules {
-            recursive_expand(&mut rule.item);
-            resp_json.dot_set(&rule.path, rule.item.clone());
-        }
-    }
 
-    let final_response_string = serde_json::to_string(&resp_json).unwrap();
+    returned_response.headers_mut().insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    returned_response.headers_mut().insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
 
-    let mut returned_response = Response::from_parts(client_parts, Body::from(final_response_string.clone()));
-    returned_response.headers_mut().insert("content-length", HeaderValue::from_str(&*final_response_string.as_bytes().len().to_string()).unwrap());
-    returned_response.headers_mut().clear();
-    returned_response.headers_mut().insert("Access-Control-Allow-Origin",  HeaderValue::from_static("*"));
-    returned_response.headers_mut().insert("Access-Control-Allow-Headers",  HeaderValue::from_static("authorization,content-type"));
     Some(returned_response)
 }
 
-/// This is our service handler. It receives a Request, routes on its
-/// path, and returns a Future of a Response.
-async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
+async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
         (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(
@@ -209,10 +272,11 @@ async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body
 
         (&Method::OPTIONS, _) => {
             let mut new_response = Response::new(Body::from(""));
-            new_response.headers_mut().insert("Access-Control-Allow-Origin",  HeaderValue::from_static("*"));
-            new_response.headers_mut().insert("Access-Control-Allow-Headers",  HeaderValue::from_static("authorization,content-type"));
+            new_response.headers_mut().insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+            new_response.headers_mut().insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
+            new_response.headers_mut().insert("Access-Control-Allow-Methods", HeaderValue::from_static("*"));
             Ok(new_response)
-        },
+        }
 
         _ => {
             //let mut not_found = Response::default();
@@ -232,19 +296,19 @@ async fn echo(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rt = Runtime::new().unwrap();
 
-    let cfg = Arc::new(RocketInfo {
+    let print_info = Arc::new(RocketInfo {
         messages: Mutex::new(Vec::new()),
     });
 
     let addr = ([127, 0, 0, 1], 8000).into();
 
-    let foo = Arc::clone(&cfg);
+    let capture_print_info = Arc::clone(&print_info);
     let make_svc = make_service_fn(move |_| {
-        let onion1 = Arc::clone(&foo);
+        let inner_capture = Arc::clone(&capture_print_info);
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
-                let onion2 = Arc::clone(&onion1);
-                async move { echo(req, onion2).await }
+                let route_capture = Arc::clone(&inner_capture);
+                async move { routes(req, route_capture).await }
             }))
         }
     });
@@ -288,7 +352,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     loop {
-        let spans: Vec<Spans> = cfg
+        let spans: Vec<Spans> = print_info
             .messages
             .lock()
             .unwrap()
@@ -296,6 +360,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|x| {
                 Spans::from(vec![
                     Span::from(x.method.to_owned()),
+                    Span::from(" "),
+                    Span::from("Mode for this path: "),
+                    Span::from(x.mode.to_owned()),
                     Span::from(" "),
                     Span::from(x.path.to_owned()),
                     Span::from(" "),
