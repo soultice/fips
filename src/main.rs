@@ -11,8 +11,7 @@ extern crate strum_macros;
 mod cli;
 mod util;
 
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Client, Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue}, header::{HeaderName}};
+use hyper::{Client, Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue, response::Parts}, header::{HeaderName}, service::{make_service_fn, service_fn}};
 use futures::{TryStreamExt, Stream}; // 0.3.7
 
 use json_patch::merge;
@@ -32,10 +31,12 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::str::FromStr;
 use std::{
     error::Error,
-    io::{stdout, Write},
+    str::FromStr,
+    io::{stdout, Write, Read},
+    ops::Deref,
+    borrow::Borrow,
     sync::{atomic::Ordering, mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -45,13 +46,9 @@ use tui::{
     text::{Span, Spans},
     Terminal,
 };
-use std::borrow::Borrow;
-use std::ops::Deref;
-use std::io::Read;
 use json_dotpath::DotPaths;
 use fake::{locales::*, faker::name::raw::*, Fake, Faker};
 use std::alloc::{handle_alloc_error};
-use hyper::http::response::Parts;
 
 enum Event<I> {
     Input(I),
