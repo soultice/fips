@@ -29,5 +29,7 @@
     - path: 'configurations.0.savedOn'
       item:
         "2020-01-07T14:16:21Z"
-- path: /viss.*
-  rules: []
+- path: /foo/bar
+  rules:
+    - path: ''
+      item: ['this is a test']

@@ -10,6 +10,10 @@ extern crate strum_macros;
 
 mod cli;
 mod util;
+mod client;
+
+use crate::cli::{ui, App};
+use crate::client::AppClient;
 
 use hyper::{Client, Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue, response::Parts}, header::{HeaderName}, service::{make_service_fn, service_fn}};
 use futures::{TryStreamExt, Stream}; // 0.3.7
@@ -24,7 +28,6 @@ use std::{convert::TryFrom, path::PathBuf};
 use tokio::runtime::Runtime;
 
 use hyper::body::Buf;
-use crate::cli::{ui, App};
 use argh::FromArgs;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
@@ -143,32 +146,6 @@ fn recursive_expand(value: &mut serde_json::Value) {
     }
 }
 
-async fn make_client_request(url_path: &str, method: &Method, forward_headers: Option<Vec<String>>, body: Body, parts: &hyper::http::request::Parts) -> Option<(Parts, serde_json::Value)> {
-    let client = Client::new();
-    let mut client_req = hyper::Request::builder().method(method.clone()).uri(url_path).body(body).unwrap();
-
-    if let Some(forward_headers) = forward_headers {
-        for header_name in forward_headers {
-            //println!("header-name {}", header_name);
-            let header = HeaderName::from_str(&header_name).unwrap();
-            let header_value = parts.headers.get(header_name).unwrap().clone();
-            client_req.headers_mut().insert(header, header_value);
-        }
-    }
-
-    let client_res = client.request(client_req).await.unwrap();
-    let (mut client_parts, client_body) = client_res.into_parts();
-    //println!("{:?}", client_parts.headers);
-    let body = hyper::body::aggregate(client_body).await.unwrap();
-    let mut buffer = String::new();
-    body.reader().read_to_string(&mut buffer);
-    let mut resp_json: serde_json::Value = serde_json::Value::from("");
-    if !buffer.is_empty() {
-        resp_json = serde_json::from_str(&buffer).unwrap();
-    }
-    Some((client_parts, resp_json))
-}
-
 async fn moxy<'r>(
     body: Body,
     parts: hyper::http::request::Parts,
@@ -204,7 +181,20 @@ async fn moxy<'r>(
                         url_path.push_str(&forward_url);
                     }
                     url_path.push_str(&uri.to_string());
-                    let (mut client_parts, mut resp_json) = make_client_request(&url_path, &method, config[firstMatchedRule].forwardHeaders.clone(), body, &parts).await?;
+
+                    let body_str = hyper::body::aggregate(body).await.unwrap();
+                    let mut buffer = String::new();
+                    body_str.reader().read_to_string(&mut buffer);
+
+                    let mut client = AppClient{
+                        uri: &url_path,
+                        method,
+                        headers: config[firstMatchedRule].forwardHeaders.clone(),
+                        body: buffer,
+                        parts: &parts
+                    };
+
+                    let (mut client_parts, mut resp_json) = client.response().await?;
 
                     if let Some(rules) = &mut config[firstMatchedRule].rules {
                         for rule in rules {
