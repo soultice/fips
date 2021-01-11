@@ -85,10 +85,11 @@ async fn moxy<'r>(
     let matches = cfg.matching_rules(&uri);
 
     let (mut returned_response, mode) = match matches.len() {
-        0 => (
-            Response::new(Body::from("no matching rule found")),
-            Mode::PROXY,
-        ),
+        0 => ({
+            let mut response = Response::new(Body::from("no matching rule found"))
+                * response.status_mut() = StatusCode::NOT_FOUND;
+            (response, Mode::PROXY)
+        },),
         _ => {
             let first_matched_rule = cfg.get_rule_collection_mut(matches[0])?;
             let mode: Mode = first_matched_rule.mode();
