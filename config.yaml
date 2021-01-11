@@ -1,5 +1,6 @@
 # Order matters!
 - path: /sccs/v1/customers/.*/markets
+  #responseStatus: 400
   forwardUri:
     "http://localhost:4041"
   forwardHeaders:
@@ -8,13 +9,16 @@
   backwardHeaders:
     - "content-type"
   rules:
+    - path: 'configurations.0.savedOn'
+      item:
+        "2020-01-07T14:16:21Z"
     - path: 'configurations.>>'
       item:
         configurationId: "ef53530c-a8a0-4ae6-a7a1-fc6f46d61a529"
         imageUrl: "https://europe.stage.starconnect-ce.i.daimler.com/iris/iris.png?COSY-EU-100-1713d0VXqXWFqtyO67PobzIr3eWsrrCsdRRzwQZQ9vZbMw3SGtuyItsd4vQcUfgLWXGEzyBJ0l7OVOB2KbjbApJiRI5usoYQC3UvQkzNLt6m7jaSthymI9WFAocUf8XNXGEHiTJ0lU0xOB2GS1bApFdoI5uC5xQCPFi2J%25xVZkF7p86oH3MkNulKKqD%25WjcNWmtdDZGZMuMapgeLlHp7RKjM1&&BKGND=9&IMGT=P27&POV=BE030,PZM"
         modelName: "{{Name}}"
         onlineCode: "MYCODE"
-        savedOn: "2021-01-07T14:16:21Z"
+        savedOn: "2020-01-07T14:16:21Z"
         state: "RAW"
         vehicleId: "de_DE__2050181__AU-001_GC-421_LE-L_LU-040_MJ-801_PC-P15-P75_PS-M02#_SA-02B-08U-09U-258-270-274-294-345-351-362-428-440-475-506-537-580-58U-620-677-70B-79B-893-915-927-969-971-B59-H80-K11-L3E-R01-R69-U01-U10-U60-U79-U85_SC-092-155-178-1B3-1P6-2U1-2U8-3U1-3V7-5P6-6P5-8U6-8U8-998-B09-K13-K27-PZB"
     - path: 'configurations.<<'
@@ -25,10 +29,7 @@
         onlineCode: "MYCODE"
         savedOn: "2021-01-07T14:16:21Z"
         state: "RAW"
-        vehicleId: "de_DE__2050181__AU-001_GC-421_LE-L_LU-040_MJ-801_PC-P15-P75_PS-M02#_SA-02B-08U-09U-258-270-274-294-345-351-362-428-440-475-506-537-580-58U-620-677-70B-79B-893-915-927-969-971-B59-H80-K11-L3E-R01-R69-U01-U10-U60-U79-U85_SC-092-155-178-1B3-1P6-2U1-2U8-3U1-3V7-5P6-6P5-8U6-8U8-998-B09-K13-K27-PZB"
-    - path: 'configurations.0.savedOn'
-      item:
-        "2020-01-07T14:16:21Z"
+        vehicleId: "de_DE__2050181__AU-001_GC-421_LE-L_LU-040_MJ-801_PC-P15-P75_PS-M02#_SA-02B-08U-09U-258-270-274-294-345-351-362-428-440-475-506-537-580-58U-620-677-70B-79B-893-915-927-969-971-B59-H80-K11-L3E-R01-R69-U01-U10-U60-U79-U85_SC-092-155-178-1B3-1P6-2U1-2U8-3U1-3V7-5P6-6P5-8U6-8U8-998-B09-K13-PZB"
 - path: /foo/bar
   rules:
     - path: ''

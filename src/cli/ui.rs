@@ -10,13 +10,6 @@ use tui::{
     },
     Frame,
 };
-use std::{
-    error::Error,
-    io::{stdout, Write},
-    sync::{atomic::Ordering, mpsc, Mutex},
-    thread,
-    time::{Duration, Instant},
-};
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, text: Vec<Spans>) {
     let chunks = Layout::default()
@@ -39,7 +32,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, text: Vec<Spans>) {
     };
 }
 
-fn draw_first_tab<B>(f: &mut Frame<B>, app: &mut App, area: Rect, text: Vec<Spans>)
+fn draw_first_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, text: Vec<Spans>)
 where
     B: Backend,
 {

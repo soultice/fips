@@ -1,4 +1,4 @@
-use hyper::{Client, Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue, response::Parts}, header::{HeaderName}, service::{make_service_fn, service_fn}};
+use hyper::{Client, Body, Method, http::{response::Parts}, header::{HeaderName}, Uri};
 use std::io::Read;
 use std::str::FromStr;
 use crate::bytes::Buf;
@@ -6,7 +6,7 @@ use crate::bytes::Buf;
 #[derive(Debug)]
 pub struct AppClient<'a>
 {
-    pub uri: &'a str,
+    pub uri: &'a Uri,
     pub method: &'a Method,
     pub headers: Option<Vec<String>>,
     pub body: String,
@@ -29,11 +29,11 @@ impl <'a> AppClient<'a> {
         }
 
         let client_res = client.request(client_req).await.unwrap();
-        let (mut client_parts, client_body) = client_res.into_parts();
+        let (client_parts, client_body) = client_res.into_parts();
         //println!("{:?}", client_parts.headers);
-        let body = hyper::body::aggregate(client_body).await.unwrap();
+        let body = hyper::body::aggregate(client_body).await.ok()?;
         let mut buffer = String::new();
-        body.reader().read_to_string(&mut buffer);
+        body.reader().read_to_string(&mut buffer).unwrap();
         let mut resp_json: serde_json::Value = serde_json::Value::from("");
         if !buffer.is_empty() {
             resp_json = serde_json::from_str(&buffer).unwrap();
