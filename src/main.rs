@@ -1,35 +1,41 @@
+extern crate bytes;
 extern crate json_patch;
 extern crate serde_json;
 extern crate serde_yaml;
-extern crate bytes;
 
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
 
 mod cli;
-mod util;
 mod client;
 mod configuration;
+mod util;
 
 use crate::cli::{ui, App};
 use crate::client::AppClient;
-use crate::configuration::{ Configuration, Mode};
+use crate::configuration::{Configuration, Mode};
 
-use hyper::{Body, Method, Request, Response, Server, StatusCode, http::{HeaderValue}, header::{HeaderName}, service::{make_service_fn, service_fn}};
+use hyper::{
+    header::HeaderName,
+    http::HeaderValue,
+    service::{make_service_fn, service_fn},
+    Body, Method, Request, Response, Server, StatusCode,
+};
 
 use tokio::runtime::Runtime;
 
-use hyper::body::Buf;
 use argh::FromArgs;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use hyper::body::Buf;
+use json_dotpath::DotPaths;
 use std::{
+    io::{stdout, Read, Write},
     str::FromStr,
-    io::{stdout, Write, Read},
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -39,7 +45,6 @@ use tui::{
     text::{Span, Spans},
     Terminal,
 };
-use json_dotpath::DotPaths;
 
 enum Event<I> {
     Input(I),
@@ -80,9 +85,10 @@ async fn moxy<'r>(
     let matches = cfg.matching_rules(&uri);
 
     let (mut returned_response, mode) = match matches.len() {
-        0 => {
-            (Response::new(Body::from("no matching rule found")), Mode::PROXY)
-        }
+        0 => (
+            Response::new(Body::from("no matching rule found")),
+            Mode::PROXY,
+        ),
         _ => {
             let first_matched_rule = cfg.get_rule_collection_mut(matches[0])?;
             let mode: Mode = first_matched_rule.mode();
@@ -95,12 +101,12 @@ async fn moxy<'r>(
                     let mut buffer = String::new();
                     body_str.reader().read_to_string(&mut buffer).unwrap();
 
-                    let mut client = AppClient{
+                    let mut client = AppClient {
                         uri,
                         method,
                         headers: first_matched_rule.forward_headers.clone(),
                         body: buffer,
-                        parts: &parts
+                        parts: &parts,
                     };
 
                     let (client_parts, mut resp_json) = client.response().await?;
@@ -114,12 +120,17 @@ async fn moxy<'r>(
                     }
 
                     let final_response_string = serde_json::to_string(&resp_json).ok()?;
-                    let returned_response = Response::from_parts(client_parts, Body::from(final_response_string.clone()));
+                    let returned_response = Response::from_parts(
+                        client_parts,
+                        Body::from(final_response_string.clone()),
+                    );
                     returned_response
                 }
                 _ => {
                     first_matched_rule.expand_rule_template();
-                    let body = Body::from(serde_json::to_string(&first_matched_rule.rules.as_ref()?[0].item).unwrap());
+                    let body = Body::from(
+                        serde_json::to_string(&first_matched_rule.rules.as_ref()?[0].item).unwrap(),
+                    );
                     let returned_response = Response::new(body);
                     returned_response
                 }
@@ -129,12 +140,18 @@ async fn moxy<'r>(
                 let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
                 for header_name in backward_headers {
                     let header = HeaderName::from_str(&header_name).ok()?;
-                    let header_value = returned_response.headers().get(header_name).unwrap().clone();
+                    let header_value = returned_response
+                        .headers()
+                        .get(header_name)
+                        .unwrap()
+                        .clone();
                     header_buffer.push((header, header_value));
                 }
                 returned_response.headers_mut().clear();
                 for header_tup in header_buffer {
-                    returned_response.headers_mut().insert(header_tup.0, header_tup.1);
+                    returned_response
+                        .headers_mut()
+                        .insert(header_tup.0, header_tup.1);
                 }
             }
 
@@ -153,24 +170,34 @@ async fn moxy<'r>(
         response_code: returned_response.status().to_string(),
     });
 
-
-    returned_response.headers_mut().insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-    returned_response.headers_mut().insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
+    returned_response
+        .headers_mut()
+        .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    returned_response.headers_mut().insert(
+        "Access-Control-Allow-Headers",
+        HeaderValue::from_static("*"),
+    );
     Some(returned_response)
 }
 
 async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
-        (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(
-            "",
-        ))),
+        (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
 
         (&Method::OPTIONS, _) => {
             let mut new_response = Response::new(Body::from(""));
-            new_response.headers_mut().insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-            new_response.headers_mut().insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
-            new_response.headers_mut().insert("Access-Control-Allow-Methods", HeaderValue::from_static("*"));
+            new_response
+                .headers_mut()
+                .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+            new_response.headers_mut().insert(
+                "Access-Control-Allow-Headers",
+                HeaderValue::from_static("*"),
+            );
+            new_response.headers_mut().insert(
+                "Access-Control-Allow-Methods",
+                HeaderValue::from_static("*"),
+            );
             Ok(new_response)
         }
 
@@ -181,7 +208,6 @@ async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Bo
         }
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use regex::RegexSet;
+use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
+use regex::RegexSet;
 use std::str::FromStr;
-use fake::{locales::*, faker::name::raw::*, Fake};
 
 #[derive(Debug, Display)]
 pub enum Mode {
@@ -22,20 +22,20 @@ pub struct Rule {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RuleCollection {
     pub path: String,
-    #[serde(rename="responseStatus")]
+    #[serde(rename = "responseStatus")]
     pub response_status: Option<u16>,
-    #[serde(rename="forwardUri")]
+    #[serde(rename = "forwardUri")]
     pub forward_uri: Option<String>,
-    #[serde(rename="forwardUri")]
+    #[serde(rename = "forwardUri")]
     pub forward_headers: Option<Vec<String>>,
-    #[serde(rename="forwardUri")]
+    #[serde(rename = "forwardUri")]
     pub backward_headers: Option<Vec<String>>,
     pub rules: Option<Vec<Rule>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Configuration {
-    pub rule_collection: Vec<RuleCollection>
+    pub rule_collection: Vec<RuleCollection>,
 }
 
 impl RuleCollection {
@@ -70,11 +70,15 @@ impl Configuration {
     pub fn new() -> Configuration {
         let f = std::fs::File::open("config.yaml").unwrap();
         let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
-        Configuration{ rule_collection: d }
+        Configuration { rule_collection: d }
     }
 
     pub fn matching_rules(&mut self, uri: &Uri) -> Vec<usize> {
-        let path_regex: Vec<String> = self.rule_collection.iter().map(| rule | rule.path.to_owned() ).collect();
+        let path_regex: Vec<String> = self
+            .rule_collection
+            .iter()
+            .map(|rule| rule.path.to_owned())
+            .collect();
         let set = RegexSet::new(&path_regex).unwrap();
         set.matches(&*uri.to_string()).into_iter().collect()
     }
@@ -86,14 +90,12 @@ impl Configuration {
 
 fn recursive_expand(value: &mut serde_json::Value) {
     match value {
-        serde_json::Value::String(val) => {
-            match val.as_str() {
-                "{{Name}}" => {
-                    *val = Name(EN).fake();
-                }
-                _ => {}
+        serde_json::Value::String(val) => match val.as_str() {
+            "{{Name}}" => {
+                *val = Name(EN).fake();
             }
-        }
+            _ => {}
+        },
         serde_json::Value::Array(val) => {
             for i in val {
                 recursive_expand(i);
