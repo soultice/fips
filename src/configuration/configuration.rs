@@ -68,7 +68,9 @@ impl RuleCollection {
 
 impl Configuration {
     pub fn new() -> Configuration {
-        let f = std::fs::File::open("config.yaml").unwrap();
+        let mut current_path = std::env::current_dir().unwrap();
+        current_path.push("config.yaml");
+        let f = std::fs::File::open(current_path).unwrap();
         let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
         Configuration { rule_collection: d }
     }
