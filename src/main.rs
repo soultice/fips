@@ -242,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::new("Moxy", cli.enhanced_graphics);
+    let mut app = App::new("Moxy──live on 8080 ", cli.enhanced_graphics);
 
     let (tx, rx) = mpsc::channel();
 

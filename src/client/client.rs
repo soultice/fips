@@ -31,7 +31,11 @@ impl<'a> AppClient<'a> {
         }
 
         let client_res = client.request(client_req).await.unwrap();
-        let (client_parts, client_body) = client_res.into_parts();
+        let (mut client_parts, client_body) = client_res.into_parts();
+
+        //hyper creates them automatically and crashes in case of a mismatch, so removing them is the easiest way
+        client_parts.headers.remove("content-length");
+
         let body = hyper::body::aggregate(client_body).await.ok()?;
         let mut buffer = String::new();
         body.reader().read_to_string(&mut buffer).unwrap();
