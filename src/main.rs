@@ -1,7 +1,10 @@
-extern crate bytes;
-extern crate json_patch;
-extern crate serde_json;
-extern crate serde_yaml;
+use std::alloc::System;
+
+#[global_allocator]
+static ALLOCATOR: System = System;
+
+use bytes;
+use serde_json;
 
 extern crate strum;
 #[macro_use]
@@ -10,11 +13,13 @@ extern crate strum_macros;
 mod cli;
 mod client;
 mod configuration;
+mod plugin;
 mod util;
 
 use crate::cli::{ui, App};
 use crate::client::AppClient;
 use crate::configuration::{Configuration, Mode};
+use crate::plugin::ExternalFunctions;
 
 use hyper::{
     header::HeaderName,
@@ -34,6 +39,7 @@ use crossterm::{
 use hyper::body::Buf;
 use json_dotpath::DotPaths;
 use std::{
+    fs, io,
     io::{stdout, Read, Write},
     str::FromStr,
     sync::{mpsc, Arc, Mutex},
@@ -62,8 +68,9 @@ struct Cli {
     enhanced_graphics: bool,
 }
 
-struct RocketInfo {
+struct State {
     messages: Mutex<Vec<PrintInfo>>,
+    plugins: Mutex<ExternalFunctions>,
 }
 
 struct PrintInfo {
@@ -77,7 +84,7 @@ struct PrintInfo {
 async fn moxy<'r>(
     body: Body,
     parts: hyper::http::request::Parts,
-    info: Arc<RocketInfo>,
+    state: Arc<State>,
 ) -> Option<Response<Body>> {
     let mut cfg = Configuration::new();
     let method = &parts.method;
@@ -112,7 +119,7 @@ async fn moxy<'r>(
 
                     let (client_parts, mut resp_json) = client.response().await?;
 
-                    first_matched_rule.expand_rule_template();
+                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
                     if let Some(rules) = &first_matched_rule.rules {
                         for rule in rules {
@@ -128,7 +135,7 @@ async fn moxy<'r>(
                     returned_response
                 }
                 _ => {
-                    first_matched_rule.expand_rule_template();
+                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
                     let body = Body::from(
                         serde_json::to_string(&first_matched_rule.rules.as_ref()?[0].item).unwrap(),
                     );
@@ -163,7 +170,7 @@ async fn moxy<'r>(
         }
     };
 
-    info.messages.lock().unwrap().push(PrintInfo {
+    state.messages.lock().unwrap().push(PrintInfo {
         method: method.to_string(),
         path: uri.to_string(),
         mode: mode.to_string(),
@@ -181,7 +188,7 @@ async fn moxy<'r>(
     Some(returned_response)
 }
 
-async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Body>, hyper::Error> {
+async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve some instructions at /
         (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
@@ -204,7 +211,7 @@ async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Bo
 
         _ => {
             let (parts, body) = req.into_parts();
-            let resp = moxy(body, parts, info).await.unwrap();
+            let resp = moxy(body, parts, state).await.unwrap();
             Ok(resp)
         }
     }
@@ -212,10 +219,23 @@ async fn routes(req: Request<Body>, info: Arc<RocketInfo>) -> Result<Response<Bo
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut functions = ExternalFunctions::new();
+
+    let mut entries = fs::read_dir("./plugins")?
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, io::Error>>()?;
+
+    unsafe {
+        for path in entries {
+            functions.load(&path).expect("Function loading failed");
+        }
+    }
+
     let rt = Runtime::new().unwrap();
 
-    let print_info = Arc::new(RocketInfo {
+    let print_info = Arc::new(State {
         messages: Mutex::new(Vec::new()),
+        plugins: Mutex::new(functions),
     });
 
     let addr = ([127, 0, 0, 1], 8000).into();

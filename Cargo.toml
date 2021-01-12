@@ -25,4 +25,5 @@ json_dotpath = "1.0.3"
 fake = "2.4"
 strum = "0.20"
 strum_macros = "0.20"
+libloading = "0.6.6"
 

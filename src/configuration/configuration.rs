@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::plugin::ExternalFunctions;
 use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
@@ -39,10 +40,10 @@ pub struct Configuration {
 }
 
 impl RuleCollection {
-    pub fn expand_rule_template(&mut self) -> () {
+    pub fn expand_rule_template(&mut self, plugins: &ExternalFunctions) -> () {
         if let Some(rules) = &mut self.rules {
             for rule in rules {
-                recursive_expand(&mut rule.item);
+                recursive_expand(&mut rule.item, plugins);
             }
         }
     }
@@ -90,22 +91,27 @@ impl Configuration {
     }
 }
 
-fn recursive_expand(value: &mut serde_json::Value) {
+fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) {
     match value {
         serde_json::Value::String(val) => match val.as_str() {
             "{{Name}}" => {
-                *val = Name(EN).fake();
+                //*val = Name(EN).fake();
             }
-            _ => {}
+            _ => {
+                if plugins.has(val) {
+                    let result = plugins.call(&val, &[1.0]).expect("Invocation failed");
+                    *val = result.clone();
+                }
+            }
         },
         serde_json::Value::Array(val) => {
             for i in val {
-                recursive_expand(i);
+                recursive_expand(i, plugins);
             }
         }
         serde_json::Value::Object(val) => {
             for (_, i) in val {
-                recursive_expand(i);
+                recursive_expand(i, plugins);
             }
         }
         _ => {}
