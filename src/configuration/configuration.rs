@@ -100,7 +100,13 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
             _ => {
                 if plugins.has(val) {
                     let result = plugins.call(&val, &[1.0]).expect("Invocation failed");
-                    *val = result.clone();
+                    //*val = result.clone();
+                    let try_serialize = serde_json::from_str(&result.clone());
+                    if let Ok(i) = try_serialize {
+                        *value = i;
+                    } else {
+                        *val = result.clone();
+                    }
                 }
             }
         },
