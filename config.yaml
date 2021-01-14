@@ -30,6 +30,7 @@
         savedOn: "2021-01-07T14:16:21Z"
         state: "RAW"
         vehicleId: "de_DE__2050181__AU-001_GC-421_LE-L_LU-040_MJ-801_PC-P15-P75_PS-M02#_SA-02B-08U-09U-258-270-274-294-345-351-362-428-440-475-506-537-580-58U-620-677-70B-79B-893-915-927-969-971-B59-H80-K11-L3E-R01-R69-U01-U10-U60-U79-U85_SC-092-155-178-1B3-1P6-2U1-2U8-3U1-3V7-5P6-6P5-8U6-8U8-998-B09-K13-PZB"
+
 - path: ^/foo/bar$
   rules:
     - path: ''
@@ -41,10 +42,23 @@
         savedOn: "2021-01-07T14:16:21Z"
         state: "RAW"
         vehicleId: "de_DE__2050181__AU-001_GC-421_LE-L_LU-040_MJ-801_PC-P15-P75_PS-M02#_SA-02B-08U-09U-258-270-274-294-345-351-362-428-440-475-506-537-580-58U-620-677-70B-79B-893-915-927-969-971-B59-H80-K11-L3E-R01-R69-U01-U10-U60-U79-U85_SC-092-155-178-1B3-1P6-2U1-2U8-3U1-3V7-5P6-6P5-8U6-8U8-998-B09-K13-PZB"
-- path: ^/users$
-  forwardUri:
-    "http://localhost:3000"
+
+- path: ^/users/final/$
   rules:
-    - path: '>>'
+    - path: ''
+      item:
+        users:
+          - name: rick
+            surname: sanchez
+            status: doing epic stuff
+          - name: morty
+            surname: smith
+            status: learning things
+
+- path: ^/final/$
+  forwardUri:
+    "http://localhost:8080/users"
+  rules:
+    - path: 'users.>>'
       item:
         foo: "{{UUID}}"

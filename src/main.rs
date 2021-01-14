@@ -51,21 +51,22 @@ use tui::{
     text::{Span, Spans},
     Terminal,
 };
+use std::path::PathBuf;
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-/// Crossterm cli
+/// Moxy cli
 #[derive(Debug, FromArgs)]
 struct Cli {
-    /// time in ms between two ticks.
-    #[argh(option, default = "250")]
-    tick_rate: u64,
-    /// whether unicode symbols are used to improve the overall look of the app
-    #[argh(option, default = "true")]
-    enhanced_graphics: bool,
+    /// the port on which to start moxy
+    #[argh(option, default = "8080")]
+    port: u16,
+    /// the path to the config file for moxy
+    #[argh(option, default = "String::from(\"./config.yaml\")")]
+    enhanced_graphics: String,
 }
 
 struct State {
@@ -219,6 +220,8 @@ async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>,
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli: Cli = argh::from_env();
+
     let mut functions = ExternalFunctions::new();
 
     let mut entries = fs::read_dir("./plugins")?
@@ -233,16 +236,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rt = Runtime::new().unwrap();
 
-    let print_info = Arc::new(State {
+    let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
         plugins: Mutex::new(functions),
     });
 
-    let addr = ([127, 0, 0, 1], 8000).into();
+    let addr = ([127, 0, 0, 1], cli.port).into();
 
-    let capture_print_info = Arc::clone(&print_info);
+    let capture_state = Arc::clone(&state);
     let make_svc = make_service_fn(move |_| {
-        let inner_capture = Arc::clone(&capture_print_info);
+        let inner_capture = Arc::clone(&capture_state);
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
                 let route_capture = Arc::clone(&inner_capture);
@@ -253,8 +256,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     rt.spawn(Server::bind(&addr).serve(make_svc));
 
-    let cli: Cli = argh::from_env();
-
     enable_raw_mode()?;
 
     let mut stdout = stdout();
@@ -262,11 +263,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::new("Moxy──live on 8080 ", cli.enhanced_graphics);
+    let title= format!("Moxy──live on {} 😌", cli.port);
+    let mut app = App::new(&title, true);
 
     let (tx, rx) = mpsc::channel();
 
-    let tick_rate = Duration::from_millis(cli.tick_rate);
+    let tick_rate = Duration::from_millis(50);
     thread::spawn(move || {
         let mut last_tick = Instant::now();
         loop {
@@ -288,7 +290,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     loop {
-        let spans: Vec<Spans> = print_info
+        let spans: Vec<Spans> = state
             .messages
             .lock()
             .unwrap()
@@ -297,17 +299,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Spans::from(vec![
                     Span::from(x.method.to_owned()),
                     Span::from(" "),
-                    Span::from("Mode for this path: "),
+                    Span::from("Mode: "),
                     Span::from(x.mode.to_owned()),
-                    Span::from(" "),
-                    Span::from(x.path.to_owned()),
+                    Span::from("=> "),
+                    Span::from(x.response_code.to_owned()),
                     Span::from(" "),
                     Span::from("Matched Rules: "),
-                    Span::from(" "),
                     Span::from(x.matching_rules.to_owned().to_string()),
                     Span::from(" "),
-                    Span::from("Response Code: => "),
-                    Span::from(x.response_code.to_owned()),
+                    Span::from(x.path.to_owned()),
                 ])
             })
             .collect();
