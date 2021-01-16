@@ -1,4 +1,5 @@
 use std::alloc::System;
+use std::env;
 use std::fmt::Display;
 
 #[global_allocator]
@@ -17,10 +18,10 @@ mod configuration;
 mod plugin;
 mod util;
 
-use crate::cli::{ui, App};
-use crate::client::AppClient;
-use crate::configuration::{Configuration, Mode};
-use crate::plugin::ExternalFunctions;
+use cli::{ui, App};
+use client::{AppClient, ClientError};
+use configuration::{Configuration, Mode};
+use plugin::ExternalFunctions;
 
 use hyper::{
     header::HeaderName,
@@ -88,6 +89,14 @@ pub enum MainError {
     Other { msg: String },
 }
 
+impl From<ClientError> for MainError {
+    fn from(client_error: ClientError) -> MainError {
+        match client_error {
+            ClientError::Other { msg } => MainError::Other { msg },
+        }
+    }
+}
+
 impl<S: ToString> From<S> for MainError {
     fn from(other: S) -> MainError {
         MainError::Other {
@@ -132,7 +141,7 @@ async fn moxy<'r>(
                         parts: &parts,
                     };
 
-                    let (client_parts, mut resp_json) = client.response().await.unwrap();
+                    let (client_parts, mut resp_json) = client.response().await?;
 
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
@@ -239,9 +248,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut functions = ExternalFunctions::new();
 
-    let mut entries = fs::read_dir("./plugins")?
-        .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()?;
+    let mut entries: Vec<_> = fs::read_dir("./plugins")?
+        .filter_map(|res| {
+            let path = match env::consts::OS {
+                "windows" => match res {
+                    Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
+                    _ => None,
+                },
+                _ => match res {
+                    Ok(e) if e.path().extension()? == "so" => Some(e.path()),
+                    _ => None,
+                },
+            };
+            path
+        })
+        .collect();
 
     unsafe {
         for path in entries {
