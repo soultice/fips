@@ -1,3 +1,4 @@
+use clap::Clap;
 use std::alloc::System;
 use std::env;
 use std::fmt::Display;
@@ -32,7 +33,6 @@ use hyper::{
 
 use tokio::runtime::Runtime;
 
-use argh::FromArgs;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
     execute,
@@ -60,23 +60,18 @@ enum Event<I> {
     Tick,
 }
 
-/// Moxy cli
-#[derive(Debug, FromArgs)]
-struct Cli {
-    /// the port on which to start moxy
-    #[argh(option, default = "8080")]
-    port: u16,
-    /// the path to the config file for moxy
-    #[argh(option, default = "String::from(\"./config.yaml\")")]
-    enhanced_graphics: String,
-}
-
 struct State {
     messages: Mutex<Vec<PrintInfo>>,
     plugins: Mutex<ExternalFunctions>,
+    configuration: Mutex<Configuration>,
 }
 
-struct PrintInfo {
+enum PrintInfo {
+    PLAIN(String),
+    MOXY(MoxyInfo),
+}
+
+struct MoxyInfo {
     method: String,
     path: String,
     mode: String,
@@ -110,10 +105,12 @@ async fn moxy<'r>(
     parts: hyper::http::request::Parts,
     state: Arc<State>,
 ) -> Result<Response<Body>, MainError> {
-    let mut cfg = Configuration::new();
+    let capture = Arc::clone(&state);
+    //let mut cfg: Configuration = Configuration::new(PathBuf::from("./config.yaml"));
     let method = &parts.method;
     let uri = &parts.uri;
-    let matches = cfg.matching_rules(&uri);
+    //let matches = cfg.matching_rules(&uri);
+    let matches = state.configuration.lock().unwrap().matching_rules(&uri);
 
     let (mut returned_response, mode) = match matches.len() {
         0 => {
@@ -122,7 +119,14 @@ async fn moxy<'r>(
             (response, Mode::PROXY)
         }
         _ => {
-            let first_matched_rule = cfg.get_rule_collection_mut(matches[0]).unwrap();
+            //let mut first_matched_rule = cfg.clone_collection(matches[0]);
+            let mut first_matched_rule = state
+                .configuration
+                .lock()
+                .unwrap()
+                .clone_collection(matches[0]);
+            //let mut test = cfg.clone_collection(matches[0]);
+            //println!("{:?}", test);
             let mode: Mode = first_matched_rule.mode();
 
             let mut returned_response = match mode {
@@ -171,7 +175,7 @@ async fn moxy<'r>(
             if let Some(backward_headers) = &first_matched_rule.backward_headers {
                 let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
                 for header_name in backward_headers {
-                    let header = HeaderName::from_str(&header_name)?;
+                    let header = HeaderName::from_str("foo")?; //HeaderName::from_str(&header_name)?;
                     let header_value = returned_response
                         .headers()
                         .get(header_name)
@@ -194,13 +198,17 @@ async fn moxy<'r>(
         }
     };
 
-    state.messages.lock().unwrap().push(PrintInfo {
-        method: method.to_string(),
-        path: uri.to_string(),
-        mode: mode.to_string(),
-        matching_rules: matches.len(),
-        response_code: returned_response.status().to_string(),
-    });
+    state
+        .messages
+        .lock()
+        .unwrap()
+        .push(PrintInfo::MOXY(MoxyInfo {
+            method: method.to_string(),
+            path: uri.to_string(),
+            mode: mode.to_string(),
+            matching_rules: matches.len(),
+            response_code: returned_response.status().to_string(),
+        }));
 
     returned_response
         .headers_mut()
@@ -242,9 +250,19 @@ async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>,
     }
 }
 
+#[derive(Clap)]
+#[clap(version = "1.0", author = "Florian Pfingstag")]
+struct Opts {
+    /// Sets a custom config file. Could have been an Option<T> with no default too
+    #[clap(short, long, default_value = "./config.yaml")]
+    config: PathBuf,
+    #[clap(short, long, default_value = "8888")]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli: Cli = argh::from_env();
+    let opts: Opts = Opts::parse();
 
     let mut functions = ExternalFunctions::new();
 
@@ -275,9 +293,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
         plugins: Mutex::new(functions),
+        configuration: Mutex::new(Configuration::new(opts.config.clone())),
     });
 
-    let addr = ([127, 0, 0, 1], cli.port).into();
+    let addr = ([127, 0, 0, 1], opts.port).into();
 
     let capture_state = Arc::clone(&state);
     let make_svc = make_service_fn(move |_| {
@@ -299,7 +318,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let title = format!("Moxy──live on {} 😌", cli.port);
+    let title = format!(
+        "Moxy──live on {} 😌, using config path: {}",
+        opts.port,
+        opts.config.clone().to_str().unwrap()
+    );
     let mut app = App::new(&title, true);
 
     let (tx, rx) = mpsc::channel();
@@ -331,8 +354,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .lock()
             .unwrap()
             .iter()
-            .map(|x| {
-                Spans::from(vec![
+            .map(|x| match x {
+                PrintInfo::PLAIN(info) => Spans::from(vec![Span::from(info.clone())]),
+                PrintInfo::MOXY(x) => Spans::from(vec![
                     Span::from(x.method.to_owned()),
                     Span::from(" "),
                     Span::from("Mode: "),
@@ -344,7 +368,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Span::from(x.matching_rules.to_owned().to_string()),
                     Span::from(" "),
                     Span::from(x.path.to_owned()),
-                ])
+                ]),
             })
             .collect();
 
@@ -361,6 +385,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rt.shutdown_background();
                     terminal.show_cursor()?;
                     break;
+                }
+                KeyCode::Char('r') => {
+                    *state.configuration.lock().unwrap() = Configuration::new(opts.config.clone());
+                    state
+                        .messages
+                        .lock()
+                        .unwrap()
+                        .push(PrintInfo::PLAIN(String::from("Config file reloaded")))
+                }
+                KeyCode::Char('c') => {
+                    *state.messages.lock().unwrap() = Vec::new();
                 }
                 KeyCode::Char(_c) => {}
                 KeyCode::Left => app.on_left(),

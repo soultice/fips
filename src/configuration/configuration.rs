@@ -5,6 +5,7 @@ use crate::plugin::ExternalFunctions;
 use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 #[derive(Debug, Display)]
@@ -14,13 +15,12 @@ pub enum Mode {
     MOCK,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Rule {
-    pub path: String,
-    pub item: Value,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Configuration {
+    pub rule_collection: Vec<RuleCollection>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RuleCollection {
     pub path: String,
     #[serde(rename = "responseStatus")]
@@ -34,9 +34,10 @@ pub struct RuleCollection {
     pub rules: Option<Vec<Rule>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Configuration {
-    pub rule_collection: Vec<RuleCollection>,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Rule {
+    pub path: String,
+    pub item: Value,
 }
 
 impl RuleCollection {
@@ -68,10 +69,9 @@ impl RuleCollection {
 }
 
 impl Configuration {
-    pub fn new() -> Configuration {
-        let mut current_path = std::env::current_dir().unwrap();
-        current_path.push("config.yaml");
-        let f = std::fs::File::open(current_path).unwrap();
+    pub fn new(path_to_config: PathBuf) -> Configuration {
+        let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
+        let f = std::fs::File::open(abs_path_to_config).unwrap();
         let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
         Configuration { rule_collection: d }
     }
@@ -88,6 +88,10 @@ impl Configuration {
 
     pub fn get_rule_collection_mut(&mut self, idx: usize) -> Option<&mut RuleCollection> {
         self.rule_collection.get_mut(idx)
+    }
+
+    pub fn clone_collection(&mut self, idx: usize) -> RuleCollection {
+        self.rule_collection.get_mut(idx).unwrap().clone()
     }
 }
 
