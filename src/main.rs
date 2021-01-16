@@ -1,4 +1,5 @@
 use std::alloc::System;
+use std::fmt::Display;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
@@ -38,6 +39,7 @@ use crossterm::{
 };
 use hyper::body::Buf;
 use json_dotpath::DotPaths;
+use std::path::PathBuf;
 use std::{
     fs, io,
     io::{stdout, Read, Write},
@@ -51,7 +53,6 @@ use tui::{
     text::{Span, Spans},
     Terminal,
 };
-use std::path::PathBuf;
 
 enum Event<I> {
     Input(I),
@@ -82,11 +83,24 @@ struct PrintInfo {
     response_code: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum MainError {
+    Other { msg: String },
+}
+
+impl<S: ToString> From<S> for MainError {
+    fn from(other: S) -> MainError {
+        MainError::Other {
+            msg: other.to_string(),
+        }
+    }
+}
+
 async fn moxy<'r>(
     body: Body,
     parts: hyper::http::request::Parts,
     state: Arc<State>,
-) -> Option<Response<Body>> {
+) -> Result<Response<Body>, MainError> {
     let mut cfg = Configuration::new();
     let method = &parts.method;
     let uri = &parts.uri;
@@ -99,16 +113,16 @@ async fn moxy<'r>(
             (response, Mode::PROXY)
         }
         _ => {
-            let first_matched_rule = cfg.get_rule_collection_mut(matches[0])?;
+            let first_matched_rule = cfg.get_rule_collection_mut(matches[0]).unwrap();
             let mode: Mode = first_matched_rule.mode();
 
             let mut returned_response = match mode {
                 Mode::PROXY | Mode::MOXY => {
                     let uri = &first_matched_rule.forward_url(&uri);
 
-                    let body_str = hyper::body::aggregate(body).await.unwrap();
+                    let body_str = hyper::body::aggregate(body).await?;
                     let mut buffer = String::new();
-                    body_str.reader().read_to_string(&mut buffer).unwrap();
+                    body_str.reader().read_to_string(&mut buffer)?;
 
                     let mut client = AppClient {
                         uri,
@@ -118,17 +132,17 @@ async fn moxy<'r>(
                         parts: &parts,
                     };
 
-                    let (client_parts, mut resp_json) = client.response().await?;
+                    let (client_parts, mut resp_json) = client.response().await.unwrap();
 
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
                     if let Some(rules) = &first_matched_rule.rules {
                         for rule in rules {
-                            resp_json.dot_set(&rule.path, rule.item.clone()).unwrap();
+                            resp_json.dot_set(&rule.path, rule.item.clone())?;
                         }
                     }
 
-                    let final_response_string = serde_json::to_string(&resp_json).ok()?;
+                    let final_response_string = serde_json::to_string(&resp_json)?;
                     let returned_response = Response::from_parts(
                         client_parts,
                         Body::from(final_response_string.clone()),
@@ -137,9 +151,9 @@ async fn moxy<'r>(
                 }
                 _ => {
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
-                    let body = Body::from(
-                        serde_json::to_string(&first_matched_rule.rules.as_ref()?[0].item).unwrap(),
-                    );
+                    let body = Body::from(serde_json::to_string(
+                        &first_matched_rule.rules.as_ref().unwrap()[0].item,
+                    )?);
                     let returned_response = Response::new(body);
                     returned_response
                 }
@@ -148,7 +162,7 @@ async fn moxy<'r>(
             if let Some(backward_headers) = &first_matched_rule.backward_headers {
                 let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
                 for header_name in backward_headers {
-                    let header = HeaderName::from_str(&header_name).ok()?;
+                    let header = HeaderName::from_str(&header_name)?;
                     let header_value = returned_response
                         .headers()
                         .get(header_name)
@@ -165,7 +179,7 @@ async fn moxy<'r>(
             }
 
             if let Some(response_status) = &first_matched_rule.response_status {
-                *returned_response.status_mut() = StatusCode::from_u16(*response_status).ok()?
+                *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
             }
             (returned_response, mode)
         }
@@ -186,7 +200,8 @@ async fn moxy<'r>(
         "Access-Control-Allow-Headers",
         HeaderValue::from_static("*"),
     );
-    Some(returned_response)
+
+    Ok(returned_response)
 }
 
 async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
@@ -212,7 +227,7 @@ async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>,
 
         _ => {
             let (parts, body) = req.into_parts();
-            let resp = moxy(body, parts, state).await.unwrap();
+            let resp: Response<Body> = moxy(body, parts, state).await.unwrap();
             Ok(resp)
         }
     }
@@ -263,7 +278,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let title= format!("Moxy──live on {} 😌", cli.port);
+    let title = format!("Moxy──live on {} 😌", cli.port);
     let mut app = App::new(&title, true);
 
     let (tx, rx) = mpsc::channel();
