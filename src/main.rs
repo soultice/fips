@@ -283,7 +283,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect();
 
     unsafe {
-        for path in entries {
+        //entries.iter()
+        for path in entries.iter() {
             functions.load(&path).expect("Function loading failed");
         }
     }
@@ -349,7 +350,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     loop {
-        let spans: Vec<Spans> = state
+        let main_info: Vec<Spans> = state
             .messages
             .lock()
             .unwrap()
@@ -372,7 +373,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
-        terminal.draw(|f| ui::draw(f, &mut app, spans))?;
+        let loaded_plugins_info: Vec<Spans> = entries
+            .iter()
+            .map(|e| Spans::from(Span::from(e.to_str().unwrap())))
+            .collect();
+
+        terminal.draw(|f| {
+            ui::draw(
+                f,
+                &mut app,
+                main_info,
+                loaded_plugins_info.clone(),
+                loaded_plugins_info.clone(),
+            )
+        })?;
         match rx.recv()? {
             Event::Input(event) => match event.code {
                 KeyCode::Esc => {

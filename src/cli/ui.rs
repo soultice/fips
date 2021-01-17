@@ -4,14 +4,17 @@ use tui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{
-        Block, Borders,
-        Paragraph, Tabs, Wrap
-    },
+    widgets::{Block, Borders, Paragraph, Tabs, Wrap},
     Frame,
 };
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, text: Vec<Spans>) {
+pub fn draw<B: Backend>(
+    f: &mut Frame<B>,
+    app: &mut App,
+    text: Vec<Spans>,
+    rules: Vec<Spans>,
+    plugins: Vec<Spans>,
+) {
     let chunks = Layout::default()
         .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(f.size());
@@ -28,6 +31,8 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App, text: Vec<Spans>) {
     f.render_widget(tabs, chunks[0]);
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], text),
+        1 => draw_first_tab(f, app, chunks[1], rules),
+        2 => draw_first_tab(f, app, chunks[1], plugins),
         _ => {}
     };
 }
@@ -37,12 +42,7 @@ where
     B: Backend,
 {
     let chunks = Layout::default()
-        .constraints(
-            [
-                Constraint::Length(4),
-            ]
-            .as_ref(),
-        )
+        .constraints([Constraint::Length(4)].as_ref())
         .split(area);
     draw_text(f, chunks[0], text);
 }
@@ -51,7 +51,6 @@ fn draw_text<B>(f: &mut Frame<B>, area: Rect, text: Vec<Spans>)
 where
     B: Backend,
 {
-
     let block = Block::default().borders(Borders::ALL).title(Span::styled(
         "Logs",
         Style::default()

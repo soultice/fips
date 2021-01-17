@@ -1,4 +1,4 @@
-use crate::util::{TabsState};
+use crate::util::TabsState;
 pub struct App<'a> {
     pub title: &'a str,
     pub should_quit: bool,
@@ -12,17 +12,15 @@ impl<'a> App<'a> {
         App {
             title,
             should_quit: false,
-            tabs: TabsState::new(vec!["Requests", "Rules"]),
+            tabs: TabsState::new(vec!["Requests", "Rules", "Plugins"]),
             show_chart: true,
             enhanced_graphics,
         }
     }
 
-    pub fn on_up(&mut self) {
-    }
+    pub fn on_up(&mut self) {}
 
-    pub fn on_down(&mut self) {
-    }
+    pub fn on_down(&mut self) {}
 
     pub fn on_right(&mut self) {
         self.tabs.next();
