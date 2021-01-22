@@ -96,6 +96,16 @@ pub async fn moxy<'r>(
                 }
             }
 
+            if let Some(headers) = &first_matched_rule.headers {
+                for header in headers {
+                    let header_name = HeaderName::from_str(header.0)?;
+                    let header_value = HeaderValue::from_str(header.1)?;
+                    returned_response
+                        .headers_mut()
+                        .insert(header_name, header_value);
+                }
+            }
+
             if let Some(response_status) = &first_matched_rule.response_status {
                 *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
             }

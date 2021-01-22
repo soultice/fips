@@ -5,6 +5,7 @@ use crate::plugin::ExternalFunctions;
 use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -34,6 +35,7 @@ pub struct RuleCollection {
     pub forward_headers: Option<Vec<String>>,
     #[serde(rename = "backwardHeaders")]
     pub backward_headers: Option<Vec<String>>,
+    pub headers: Option<HashMap<String, String>>,
     pub rules: Option<Vec<Rule>>,
 }
 

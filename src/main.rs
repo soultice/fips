@@ -43,6 +43,8 @@ use tui::{
     Terminal,
 };
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 enum Event<I> {
     Input(I),
     Tick,
@@ -107,9 +109,9 @@ impl<'a> From<&MoxyInfo> for Spans<'a> {
 }
 
 #[derive(Clap, Clone)]
-#[clap(version = "1.0", author = "Florian Pfingstag")]
+#[clap(version = VERSION, author = "Florian Pfingstag")]
 pub struct Opts {
-    /// Sets a custom config file
+    /// The directory from where to load config files
     #[clap(short, long, default_value = "./config")]
     config: PathBuf,
     /// The directory from where to load plugins
