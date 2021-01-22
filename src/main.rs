@@ -1,12 +1,8 @@
-use clap::Clap;
 use std::alloc::System;
-use std::panic;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use bytes;
-extern crate strum;
 #[macro_use]
 extern crate strum_macros;
 
@@ -17,30 +13,30 @@ mod moxy;
 mod plugin;
 mod util;
 
+use bytes;
+use clap::Clap;
 use cli::{ui, App};
 use client::ClientError;
 use configuration::Configuration;
-use plugin::ExternalFunctions;
-
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Server,
 };
-
-use tokio::runtime::Runtime;
-
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use std::path::PathBuf;
+use plugin::ExternalFunctions;
+use std::panic;
 use std::{
     io::{stdout, Write},
+    path::PathBuf,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
+use tokio::runtime::Runtime;
 use tui::{
     backend::CrosstermBackend,
     text::{Span, Spans},
@@ -168,8 +164,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(&title, true);
 
     let (tx, rx) = mpsc::channel();
-
     let tick_rate = Duration::from_millis(50);
+
     thread::spawn(move || {
         let mut last_tick = Instant::now();
         loop {
@@ -231,8 +227,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut app, &state, &opts),
-            Event::Tick => app.on_tick(),
+            Event::Input(event) => util::match_keybinds(event.code, &mut app, &state, &opts)?,
+            Event::Tick => app.on_tick()?,
         };
 
         if app.should_quit {

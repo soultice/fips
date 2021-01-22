@@ -1,18 +1,8 @@
 use crate::cli::App;
 use crate::configuration::Configuration;
 use crate::{Opts, PrintInfo, State};
-use crossterm::event::DisableMouseCapture;
 use crossterm::event::KeyCode;
-use crossterm::execute;
-use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-};
-use std::io::Stdout;
-use std::io::Write;
-use std::sync::{Arc, Mutex};
-use tokio::runtime::Runtime;
-use tui::backend::CrosstermBackend;
-use tui::Terminal;
+use std::sync::Arc;
 
 pub fn match_keybinds(
     code: KeyCode,
