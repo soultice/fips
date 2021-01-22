@@ -20,6 +20,7 @@ pub enum Mode {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub rule_collection: Vec<RuleCollection>,
+    loaded_paths: Vec<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -74,9 +75,29 @@ impl Configuration {
     pub fn new(path_to_config: &PathBuf) -> Configuration {
         let mut rules = Configuration {
             rule_collection: Vec::new(),
+            loaded_paths: Vec::new(),
         };
         rules.load_from_path(path_to_config);
         rules
+    }
+
+    pub fn paths(&self) -> Vec<String> {
+        self.loaded_paths
+            .iter()
+            .map(|e| String::from(e.to_str().unwrap()))
+            .collect()
+    }
+
+    pub fn reload(&mut self) -> io::Result<()> {
+        self.rule_collection = Vec::new();
+        for path in self.loaded_paths.iter() {
+            let f = std::fs::File::open(path).unwrap();
+            let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
+            for rule in d {
+                self.rule_collection.push(rule)
+            }
+        }
+        Ok(())
     }
 
     fn load_from_path(&mut self, path_to_config: &PathBuf) -> io::Result<()> {
@@ -93,6 +114,7 @@ impl Configuration {
             for rule in d {
                 self.rule_collection.push(rule)
             }
+            self.loaded_paths.push(path.clone());
         }
         Ok(())
     }

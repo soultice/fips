@@ -1,5 +1,6 @@
 use crate::cli::App;
 use crate::PrintInfo;
+use futures::StreamExt;
 use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},
@@ -41,6 +42,16 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         })
         .collect();
 
+    let loaded_rules_info: Vec<Spans> = app
+        .state
+        .configuration
+        .lock()
+        .unwrap()
+        .paths()
+        .iter()
+        .map(|p| Spans::from(Span::from(p.clone())))
+        .collect();
+
     let loaded_plugins_info: Vec<Spans> = app
         .state
         .plugins
@@ -54,7 +65,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], request_info),
-        1 => draw_first_tab(f, app, chunks[1], loaded_plugins_info.clone()),
+        1 => draw_first_tab(f, app, chunks[1], loaded_rules_info),
         2 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
         _ => {}
     };

@@ -195,7 +195,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| ui::draw(f, &mut app))?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut app, &opts)?,
+            Event::Input(event) => util::match_keybinds(event.code, &mut app)?,
             Event::Tick => app.on_tick()?,
         };
 

@@ -4,22 +4,18 @@ use crate::{Opts, PrintInfo, State};
 use crossterm::event::KeyCode;
 use std::sync::Arc;
 
-pub fn match_keybinds(
-    code: KeyCode,
-    app: &mut App,
-    opts: &Opts,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     match code {
         KeyCode::Esc => {
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            *app.state.configuration.lock().unwrap() = Configuration::new(&opts.config);
+            app.state.configuration.lock().unwrap().reload();
             app.state
                 .messages
                 .lock()
                 .unwrap()
-                .push(PrintInfo::PLAIN(String::from("Config file reloaded")))
+                .push(PrintInfo::PLAIN(String::from("Config files reloaded")))
         }
         KeyCode::Char('c') => {
             *app.state.messages.lock().unwrap() = Vec::new();
