@@ -7,7 +7,6 @@ use std::sync::Arc;
 pub fn match_keybinds(
     code: KeyCode,
     app: &mut App,
-    state: &Arc<State>,
     opts: &Opts,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match code {
@@ -15,15 +14,15 @@ pub fn match_keybinds(
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            *state.configuration.lock().unwrap() = Configuration::new(&opts.config);
-            state
+            *app.state.configuration.lock().unwrap() = Configuration::new(&opts.config);
+            app.state
                 .messages
                 .lock()
                 .unwrap()
                 .push(PrintInfo::PLAIN(String::from("Config file reloaded")))
         }
         KeyCode::Char('c') => {
-            *state.messages.lock().unwrap() = Vec::new();
+            *app.state.messages.lock().unwrap() = Vec::new();
         }
         KeyCode::Char(_c) => {}
         KeyCode::BackTab => app.on_left(),

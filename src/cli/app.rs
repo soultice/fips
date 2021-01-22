@@ -1,20 +1,25 @@
 use crate::util::TabsState;
+use crate::{Opts, State};
+use std::sync::Arc;
+
 pub struct App<'a> {
-    pub title: &'a str,
     pub should_quit: bool,
     pub tabs: TabsState<'a>,
     pub show_chart: bool,
     pub enhanced_graphics: bool,
+    pub state: Arc<State>,
+    pub opts: Opts,
 }
 
 impl<'a> App<'a> {
-    pub fn new(title: &'a str, enhanced_graphics: bool) -> App<'a> {
+    pub fn new(enhanced_graphics: bool, state: Arc<State>, opts: Opts) -> App<'a> {
         App {
-            title,
             should_quit: false,
             tabs: TabsState::new(vec!["Requests", "Rules", "Plugins"]),
             show_chart: true,
             enhanced_graphics,
+            state,
+            opts,
         }
     }
 

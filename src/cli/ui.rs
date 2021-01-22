@@ -1,4 +1,5 @@
 use crate::cli::App;
+use crate::PrintInfo;
 use tui::{
     backend::Backend,
     layout::{Constraint, Layout, Rect},
@@ -8,13 +9,12 @@ use tui::{
     Frame,
 };
 
-pub fn draw<B: Backend>(
-    f: &mut Frame<B>,
-    app: &mut App,
-    text: Vec<Spans>,
-    rules: Vec<Spans>,
-    plugins: Vec<Spans>,
-) {
+pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+    let app_title = format!(
+        "Moxy──live on {} 😌, using config path: {}",
+        app.opts.port,
+        app.opts.config.clone().to_str().unwrap()
+    );
     let chunks = Layout::default()
         .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(f.size());
@@ -25,14 +25,37 @@ pub fn draw<B: Backend>(
         .map(|t| Spans::from(Span::styled(*t, Style::default().fg(Color::Green))))
         .collect();
     let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL).title(app.title))
+        .block(Block::default().borders(Borders::ALL).title(app_title))
         .highlight_style(Style::default().fg(Color::Yellow))
         .select(app.tabs.index);
+
+    let request_info = app
+        .state
+        .messages
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|x| match x {
+            PrintInfo::PLAIN(info) => Spans::from(info.clone()),
+            PrintInfo::MOXY(info) => Spans::from(info),
+        })
+        .collect();
+
+    let loaded_plugins_info: Vec<Spans> = app
+        .state
+        .plugins
+        .lock()
+        .unwrap()
+        .keys()
+        .map(|e| Spans::from(Span::from(e.clone())))
+        .collect();
+
     f.render_widget(tabs, chunks[0]);
+
     match app.tabs.index {
-        0 => draw_first_tab(f, app, chunks[1], text),
-        1 => draw_first_tab(f, app, chunks[1], rules),
-        2 => draw_first_tab(f, app, chunks[1], plugins),
+        0 => draw_first_tab(f, app, chunks[1], request_info),
+        1 => draw_first_tab(f, app, chunks[1], loaded_plugins_info.clone()),
+        2 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
         _ => {}
     };
 }

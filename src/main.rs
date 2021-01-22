@@ -106,7 +106,7 @@ impl<'a> From<&MoxyInfo> for Spans<'a> {
     }
 }
 
-#[derive(Clap)]
+#[derive(Clap, Clone)]
 #[clap(version = "1.0", author = "Florian Pfingstag")]
 pub struct Opts {
     /// Sets a custom config file
@@ -133,9 +133,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         configuration: Mutex::new(Configuration::new(&opts.config)),
     });
 
+    let mut app = App::new(true, state, opts.clone());
+
     let addr = ([127, 0, 0, 1], opts.port).into();
 
-    let capture_state = Arc::clone(&state);
+    let capture_state = Arc::clone(&app.state);
     let make_svc = make_service_fn(move |_| {
         let inner_capture = Arc::clone(&capture_state);
         async move {
@@ -155,12 +157,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let title = format!(
-        "Moxy──live on {} 😌, using config path: {}",
-        opts.port,
-        opts.config.clone().to_str().unwrap()
-    );
-    let mut app = App::new(&title, true);
 
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(50);
@@ -186,7 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     panic::set_hook({
-        let foo = state.clone();
+        let foo = app.state.clone();
         Box::new(move |panic_info| {
             foo.messages
                 .lock()
@@ -196,37 +192,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     loop {
-        let main_info: Vec<Spans> = state
-            .messages
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|x| match x {
-                PrintInfo::PLAIN(info) => Spans::from(info.clone()),
-                PrintInfo::MOXY(info) => Spans::from(info),
-            })
-            .collect();
-
-        let loaded_plugins_info: Vec<Spans> = state
-            .plugins
-            .lock()
-            .unwrap()
-            .keys()
-            .map(|e| Spans::from(Span::from(e.clone())))
-            .collect();
-
-        terminal.draw(|f| {
-            ui::draw(
-                f,
-                &mut app,
-                main_info,
-                loaded_plugins_info.clone(),
-                loaded_plugins_info.clone(),
-            )
-        })?;
+        terminal.draw(|f| ui::draw(f, &mut app))?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut app, &state, &opts)?,
+            Event::Input(event) => util::match_keybinds(event.code, &mut app, &opts)?,
             Event::Tick => app.on_tick()?,
         };
 
