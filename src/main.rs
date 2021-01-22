@@ -1,14 +1,11 @@
 use clap::Clap;
 use std::alloc::System;
-use std::env;
-use std::fmt::Display;
+use std::panic;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
 use bytes;
-use serde_json;
-
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
@@ -16,19 +13,18 @@ extern crate strum_macros;
 mod cli;
 mod client;
 mod configuration;
+mod moxy;
 mod plugin;
 mod util;
 
 use cli::{ui, App};
-use client::{AppClient, ClientError};
-use configuration::{Configuration, Mode};
+use client::ClientError;
+use configuration::Configuration;
 use plugin::ExternalFunctions;
 
 use hyper::{
-    header::HeaderName,
-    http::HeaderValue,
     service::{make_service_fn, service_fn},
-    Body, Method, Request, Response, Server, StatusCode,
+    Body, Request, Server,
 };
 
 use tokio::runtime::Runtime;
@@ -38,13 +34,9 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use hyper::body::Buf;
-use json_dotpath::DotPaths;
 use std::path::PathBuf;
 use std::{
-    fs, io,
-    io::{stdout, Read, Write},
-    str::FromStr,
+    io::{stdout, Write},
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -60,7 +52,7 @@ enum Event<I> {
     Tick,
 }
 
-struct State {
+pub struct State {
     messages: Mutex<Vec<PrintInfo>>,
     plugins: Mutex<ExternalFunctions>,
     configuration: Mutex<Configuration>,
@@ -100,162 +92,15 @@ impl<S: ToString> From<S> for MainError {
     }
 }
 
-async fn moxy<'r>(
-    body: Body,
-    parts: hyper::http::request::Parts,
-    state: Arc<State>,
-) -> Result<Response<Body>, MainError> {
-    let capture = Arc::clone(&state);
-    //let mut cfg: Configuration = Configuration::new(PathBuf::from("./config.yaml"));
-    let method = &parts.method;
-    let uri = &parts.uri;
-    //let matches = cfg.matching_rules(&uri);
-    let matches = state.configuration.lock().unwrap().matching_rules(&uri);
-
-    let (mut returned_response, mode) = match matches.len() {
-        0 => {
-            let mut response = Response::new(Body::from("no matching rule found"));
-            *response.status_mut() = StatusCode::NOT_FOUND;
-            (response, Mode::PROXY)
-        }
-        _ => {
-            //let mut first_matched_rule = cfg.clone_collection(matches[0]);
-            let mut first_matched_rule = state
-                .configuration
-                .lock()
-                .unwrap()
-                .clone_collection(matches[0]);
-            //let mut test = cfg.clone_collection(matches[0]);
-            //println!("{:?}", test);
-            let mode: Mode = first_matched_rule.mode();
-
-            let mut returned_response = match mode {
-                Mode::PROXY | Mode::MOXY => {
-                    let uri = &first_matched_rule.forward_url(&uri);
-
-                    let body_str = hyper::body::aggregate(body).await?;
-                    let mut buffer = String::new();
-                    body_str.reader().read_to_string(&mut buffer)?;
-
-                    let mut client = AppClient {
-                        uri,
-                        method,
-                        headers: first_matched_rule.forward_headers.clone(),
-                        body: buffer,
-                        parts: &parts,
-                    };
-
-                    let (client_parts, mut resp_json) = client.response().await?;
-
-                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
-
-                    if let Some(rules) = &first_matched_rule.rules {
-                        for rule in rules {
-                            resp_json.dot_set(&rule.path, rule.item.clone())?;
-                        }
-                    }
-
-                    let final_response_string = serde_json::to_string(&resp_json)?;
-                    let returned_response = Response::from_parts(
-                        client_parts,
-                        Body::from(final_response_string.clone()),
-                    );
-                    returned_response
-                }
-                _ => {
-                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
-                    let body = Body::from(serde_json::to_string(
-                        &first_matched_rule.rules.as_ref().unwrap()[0].item,
-                    )?);
-                    let returned_response = Response::new(body);
-                    returned_response
-                }
-            };
-
-            if let Some(backward_headers) = &first_matched_rule.backward_headers {
-                let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
-                for header_name in backward_headers {
-                    let header = HeaderName::from_str("foo")?; //HeaderName::from_str(&header_name)?;
-                    let header_value = returned_response
-                        .headers()
-                        .get(header_name)
-                        .unwrap()
-                        .clone();
-                    header_buffer.push((header, header_value));
-                }
-                returned_response.headers_mut().clear();
-                for header_tup in header_buffer {
-                    returned_response
-                        .headers_mut()
-                        .insert(header_tup.0, header_tup.1);
-                }
-            }
-
-            if let Some(response_status) = &first_matched_rule.response_status {
-                *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
-            }
-            (returned_response, mode)
-        }
-    };
-
-    state
-        .messages
-        .lock()
-        .unwrap()
-        .push(PrintInfo::MOXY(MoxyInfo {
-            method: method.to_string(),
-            path: uri.to_string(),
-            mode: mode.to_string(),
-            matching_rules: matches.len(),
-            response_code: returned_response.status().to_string(),
-        }));
-
-    returned_response
-        .headers_mut()
-        .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-    returned_response.headers_mut().insert(
-        "Access-Control-Allow-Headers",
-        HeaderValue::from_static("*"),
-    );
-
-    Ok(returned_response)
-}
-
-async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
-    match (req.method(), req.uri().path()) {
-        // Serve some instructions at /
-        (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
-
-        (&Method::OPTIONS, _) => {
-            let mut new_response = Response::new(Body::from(""));
-            new_response
-                .headers_mut()
-                .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-            new_response.headers_mut().insert(
-                "Access-Control-Allow-Headers",
-                HeaderValue::from_static("*"),
-            );
-            new_response.headers_mut().insert(
-                "Access-Control-Allow-Methods",
-                HeaderValue::from_static("*"),
-            );
-            Ok(new_response)
-        }
-
-        _ => {
-            let (parts, body) = req.into_parts();
-            let resp: Response<Body> = moxy(body, parts, state).await.unwrap();
-            Ok(resp)
-        }
-    }
-}
-
 #[derive(Clap)]
 #[clap(version = "1.0", author = "Florian Pfingstag")]
 struct Opts {
-    /// Sets a custom config file. Could have been an Option<T> with no default too
+    /// Sets a custom config file
     #[clap(short, long, default_value = "./config.yaml")]
     config: PathBuf,
+    /// The directory from where to load plugins
+    #[clap(long, default_value = ".")]
+    plugins: PathBuf,
     #[clap(short, long, default_value = "8888")]
     port: u16,
 }
@@ -264,36 +109,14 @@ struct Opts {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
-    let mut functions = ExternalFunctions::new();
-
-    let mut entries: Vec<_> = fs::read_dir("./plugins")?
-        .filter_map(|res| {
-            let path = match env::consts::OS {
-                "windows" => match res {
-                    Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
-                    _ => None,
-                },
-                _ => match res {
-                    Ok(e) if e.path().extension()? == "so" => Some(e.path()),
-                    _ => None,
-                },
-            };
-            path
-        })
-        .collect();
-
-    unsafe {
-        //entries.iter()
-        for path in entries.iter() {
-            functions.load(&path).expect("Function loading failed");
-        }
-    }
+    let mut plugins = ExternalFunctions::new();
+    plugins.load_plugins_from_path(&opts.plugins)?;
 
     let rt = Runtime::new().unwrap();
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
-        plugins: Mutex::new(functions),
+        plugins: Mutex::new(plugins),
         configuration: Mutex::new(Configuration::new(opts.config.clone())),
     });
 
@@ -305,7 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
                 let route_capture = Arc::clone(&inner_capture);
-                async move { routes(req, route_capture).await }
+                async move { moxy::routes(req, route_capture).await }
             }))
         }
     });
@@ -349,6 +172,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     terminal.clear()?;
 
+    panic::set_hook({
+        let foo = state.clone();
+        Box::new(move |panic_info| {
+            foo.messages
+                .lock()
+                .unwrap()
+                .push(PrintInfo::PLAIN(panic_info.to_string()))
+        })
+    });
+
     loop {
         let main_info: Vec<Spans> = state
             .messages
@@ -373,9 +206,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
-        let loaded_plugins_info: Vec<Spans> = entries
-            .iter()
-            .map(|e| Spans::from(Span::from(e.to_str().unwrap())))
+        let loaded_plugins_info: Vec<Spans> = state
+            .plugins
+            .lock()
+            .unwrap()
+            .keys()
+            .map(|e| Spans::from(Span::from(e.clone())))
             .collect();
 
         terminal.draw(|f| {
@@ -387,6 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 loaded_plugins_info.clone(),
             )
         })?;
+
         match rx.recv()? {
             Event::Input(event) => match event.code {
                 KeyCode::Esc => {
@@ -412,9 +249,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     *state.messages.lock().unwrap() = Vec::new();
                 }
                 KeyCode::Char(_c) => {}
-                KeyCode::Left => app.on_left(),
+                KeyCode::BackTab => app.on_left(),
+                KeyCode::Tab => app.on_right(),
                 KeyCode::Up => app.on_up(),
-                KeyCode::Right => app.on_right(),
                 KeyCode::Down => app.on_down(),
                 _ => {}
             },

@@ -1,10 +1,11 @@
 use libloading::Library;
 use moxy::{Function, InvocationError, PluginDeclaration};
+use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::io;
-use std::rc::Rc;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::{env, fs, io};
 
 pub struct FunctionProxy {
     function: Box<dyn Function + Send>,
@@ -70,6 +71,32 @@ impl ExternalFunctions {
         Ok(())
     }
 
+    pub fn load_plugins_from_path(&mut self, plugin_dir: &PathBuf) -> io::Result<()> {
+        let abs_path_to_plugins = std::fs::canonicalize(plugin_dir).unwrap();
+        let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
+            .filter_map(|res| {
+                let path = match env::consts::OS {
+                    "windows" => match res {
+                        Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
+                        _ => None,
+                    },
+                    _ => match res {
+                        Ok(e) if e.path().extension()? == "so" => Some(e.path()),
+                        _ => None,
+                    },
+                };
+                path
+            })
+            .collect();
+
+        unsafe {
+            for path in entries.iter() {
+                self.load(&path).expect("Function loading failed");
+            }
+        }
+        Ok(())
+    }
+
     pub fn call(&self, function: &str, arguments: &[f64]) -> Result<String, InvocationError> {
         self.functions
             .get(function)
@@ -79,6 +106,10 @@ impl ExternalFunctions {
 
     pub fn has(&self, key: &str) -> bool {
         self.functions.contains_key(key)
+    }
+
+    pub fn keys(&self) -> Keys<String, FunctionProxy> {
+        self.functions.keys()
     }
 }
 

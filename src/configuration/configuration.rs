@@ -27,9 +27,9 @@ pub struct RuleCollection {
     pub response_status: Option<u16>,
     #[serde(rename = "forwardUri")]
     pub forward_uri: Option<String>,
-    #[serde(rename = "forwardUri")]
+    #[serde(rename = "forwardHeaders")]
     pub forward_headers: Option<Vec<String>>,
-    #[serde(rename = "forwardUri")]
+    #[serde(rename = "backwardHeaders")]
     pub backward_headers: Option<Vec<String>>,
     pub rules: Option<Vec<Rule>>,
 }
@@ -86,10 +86,6 @@ impl Configuration {
         set.matches(&*uri.to_string()).into_iter().collect()
     }
 
-    pub fn get_rule_collection_mut(&mut self, idx: usize) -> Option<&mut RuleCollection> {
-        self.rule_collection.get_mut(idx)
-    }
-
     pub fn clone_collection(&mut self, idx: usize) -> RuleCollection {
         self.rule_collection.get_mut(idx).unwrap().clone()
     }
@@ -99,7 +95,7 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
     match value {
         serde_json::Value::String(val) => match val.as_str() {
             "{{Name}}" => {
-                //*val = Name(EN).fake();
+                *val = Name(EN).fake();
             }
             _ => {
                 if plugins.has(val) {
