@@ -29,8 +29,10 @@ pub struct ExternalFunctions {
 }
 
 impl ExternalFunctions {
-    pub fn new() -> ExternalFunctions {
-        ExternalFunctions::default()
+    pub fn new(path_to_plugins: &PathBuf) -> ExternalFunctions {
+        let mut default = ExternalFunctions::default();
+        default.load_from_path(path_to_plugins);
+        default
     }
 
     /// Load a plugin library and add all contained functions to the internal
@@ -71,21 +73,18 @@ impl ExternalFunctions {
         Ok(())
     }
 
-    pub fn load_plugins_from_path(&mut self, plugin_dir: &PathBuf) -> io::Result<()> {
+    pub fn load_from_path(&mut self, plugin_dir: &PathBuf) -> io::Result<()> {
         let abs_path_to_plugins = std::fs::canonicalize(plugin_dir).unwrap();
         let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
-            .filter_map(|res| {
-                let path = match env::consts::OS {
-                    "windows" => match res {
-                        Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
-                        _ => None,
-                    },
-                    _ => match res {
-                        Ok(e) if e.path().extension()? == "so" => Some(e.path()),
-                        _ => None,
-                    },
-                };
-                path
+            .filter_map(|res| match env::consts::OS {
+                "windows" => match res {
+                    Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
+                    _ => None,
+                },
+                _ => match res {
+                    Ok(e) if e.path().extension()? == "so" => Some(e.path()),
+                    _ => None,
+                },
             })
             .collect();
 

@@ -15,7 +15,7 @@ pub fn match_keybinds(
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            *state.configuration.lock().unwrap() = Configuration::new(opts.config.clone());
+            *state.configuration.lock().unwrap() = Configuration::new(&opts.config);
             state
                 .messages
                 .lock()

@@ -110,7 +110,7 @@ impl<'a> From<&MoxyInfo> for Spans<'a> {
 #[clap(version = "1.0", author = "Florian Pfingstag")]
 pub struct Opts {
     /// Sets a custom config file
-    #[clap(short, long, default_value = "./config.yaml")]
+    #[clap(short, long, default_value = "./config")]
     config: PathBuf,
     /// The directory from where to load plugins
     #[clap(long, default_value = ".")]
@@ -123,15 +123,14 @@ pub struct Opts {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
-    let mut plugins = ExternalFunctions::new();
-    plugins.load_plugins_from_path(&opts.plugins)?;
+    let mut plugins = ExternalFunctions::new(&opts.plugins);
 
     let runtime = Runtime::new().unwrap();
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
         plugins: Mutex::new(plugins),
-        configuration: Mutex::new(Configuration::new(opts.config.clone())),
+        configuration: Mutex::new(Configuration::new(&opts.config)),
     });
 
     let addr = ([127, 0, 0, 1], opts.port).into();

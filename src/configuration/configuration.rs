@@ -5,8 +5,10 @@ use crate::plugin::ExternalFunctions;
 use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::{fs, io};
 
 #[derive(Debug, Display)]
 pub enum Mode {
@@ -69,11 +71,30 @@ impl RuleCollection {
 }
 
 impl Configuration {
-    pub fn new(path_to_config: PathBuf) -> Configuration {
+    pub fn new(path_to_config: &PathBuf) -> Configuration {
+        let mut rules = Configuration {
+            rule_collection: Vec::new(),
+        };
+        rules.load_from_path(path_to_config);
+        rules
+    }
+
+    fn load_from_path(&mut self, path_to_config: &PathBuf) -> io::Result<()> {
         let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
-        let f = std::fs::File::open(abs_path_to_config).unwrap();
-        let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
-        Configuration { rule_collection: d }
+        let entries: Vec<_> = fs::read_dir(abs_path_to_config)?
+            .filter_map(|res| match res {
+                Ok(e) if e.path().extension()? == "yaml" => Some(e.path()),
+                _ => None,
+            })
+            .collect();
+        for path in entries.iter() {
+            let f = std::fs::File::open(path).unwrap();
+            let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
+            for rule in d {
+                self.rule_collection.push(rule)
+            }
+        }
+        Ok(())
     }
 
     pub fn matching_rules(&mut self, uri: &Uri) -> Vec<usize> {
