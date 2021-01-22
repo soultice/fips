@@ -92,9 +92,27 @@ impl<S: ToString> From<S> for MainError {
     }
 }
 
+impl<'a> From<&MoxyInfo> for Spans<'a> {
+    fn from(moxy_info: &MoxyInfo) -> Spans<'a> {
+        Spans::from(vec![
+            Span::from(moxy_info.method.to_owned()),
+            Span::from(" "),
+            Span::from("Mode: "),
+            Span::from(moxy_info.mode.to_owned()),
+            Span::from("=> "),
+            Span::from(moxy_info.response_code.to_owned()),
+            Span::from(" "),
+            Span::from("Matched Rules: "),
+            Span::from(moxy_info.matching_rules.to_owned().to_string()),
+            Span::from(" "),
+            Span::from(moxy_info.path.to_owned()),
+        ])
+    }
+}
+
 #[derive(Clap)]
 #[clap(version = "1.0", author = "Florian Pfingstag")]
-struct Opts {
+pub struct Opts {
     /// Sets a custom config file
     #[clap(short, long, default_value = "./config.yaml")]
     config: PathBuf,
@@ -112,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut plugins = ExternalFunctions::new();
     plugins.load_plugins_from_path(&opts.plugins)?;
 
-    let rt = Runtime::new().unwrap();
+    let runtime = Runtime::new().unwrap();
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
@@ -133,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    rt.spawn(Server::bind(&addr).serve(make_svc));
+    runtime.spawn(Server::bind(&addr).serve(make_svc));
 
     enable_raw_mode()?;
 
@@ -189,20 +207,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap()
             .iter()
             .map(|x| match x {
-                PrintInfo::PLAIN(info) => Spans::from(vec![Span::from(info.clone())]),
-                PrintInfo::MOXY(x) => Spans::from(vec![
-                    Span::from(x.method.to_owned()),
-                    Span::from(" "),
-                    Span::from("Mode: "),
-                    Span::from(x.mode.to_owned()),
-                    Span::from("=> "),
-                    Span::from(x.response_code.to_owned()),
-                    Span::from(" "),
-                    Span::from("Matched Rules: "),
-                    Span::from(x.matching_rules.to_owned().to_string()),
-                    Span::from(" "),
-                    Span::from(x.path.to_owned()),
-                ]),
+                PrintInfo::PLAIN(info) => Spans::from(info.clone()),
+                PrintInfo::MOXY(info) => Spans::from(info),
             })
             .collect();
 
@@ -225,41 +231,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         match rx.recv()? {
-            Event::Input(event) => match event.code {
-                KeyCode::Esc => {
-                    disable_raw_mode()?;
-                    execute!(
-                        terminal.backend_mut(),
-                        LeaveAlternateScreen,
-                        DisableMouseCapture
-                    )?;
-                    rt.shutdown_background();
-                    terminal.show_cursor()?;
-                    break;
-                }
-                KeyCode::Char('r') => {
-                    *state.configuration.lock().unwrap() = Configuration::new(opts.config.clone());
-                    state
-                        .messages
-                        .lock()
-                        .unwrap()
-                        .push(PrintInfo::PLAIN(String::from("Config file reloaded")))
-                }
-                KeyCode::Char('c') => {
-                    *state.messages.lock().unwrap() = Vec::new();
-                }
-                KeyCode::Char(_c) => {}
-                KeyCode::BackTab => app.on_left(),
-                KeyCode::Tab => app.on_right(),
-                KeyCode::Up => app.on_up(),
-                KeyCode::Down => app.on_down(),
-                _ => {}
-            },
-            Event::Tick => {
-                app.on_tick();
-            }
-        }
+            Event::Input(event) => util::match_keybinds(event.code, &mut app, &state, &opts),
+            Event::Tick => app.on_tick(),
+        };
+
         if app.should_quit {
+            disable_raw_mode()?;
+            execute!(
+                terminal.backend_mut(),
+                LeaveAlternateScreen,
+                DisableMouseCapture
+            )?;
+            runtime.shutdown_background();
+            terminal.show_cursor()?;
             break;
         }
     }

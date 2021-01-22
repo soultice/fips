@@ -30,7 +30,7 @@ impl<'a> App<'a> {
         self.tabs.previous();
     }
 
-    pub fn on_tick(&mut self) {
-        // Update progress
+    pub fn on_tick(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
     }
 }

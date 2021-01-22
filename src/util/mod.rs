@@ -1,5 +1,7 @@
 #[cfg(feature = "termion")]
 pub mod event;
+mod keybinds;
+pub use keybinds::match_keybinds;
 
 pub struct TabsState<'a> {
     pub titles: Vec<&'a str>,
