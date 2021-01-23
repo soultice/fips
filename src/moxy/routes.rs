@@ -1,5 +1,6 @@
 use super::request::moxy;
-use crate::{RequestInfo, ResponseInfo, State, TrafficInfo};
+use crate::debug::{RequestInfo, ResponseInfo, TrafficInfo};
+use crate::State;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response};
 use std::sync::Arc;

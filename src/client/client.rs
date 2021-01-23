@@ -1,5 +1,6 @@
 use crate::bytes::Buf;
-use crate::{RequestInfo, ResponseInfo, State, TrafficInfo};
+use crate::debug::{RequestInfo, ResponseInfo, TrafficInfo};
+use crate::State;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::io::Read;
 use std::str::FromStr;

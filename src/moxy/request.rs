@@ -1,6 +1,7 @@
 use crate::client::AppClient;
 use crate::configuration::Mode;
-use crate::{MainError, MoxyInfo, PrintInfo, State};
+use crate::debug::{MoxyInfo, PrintInfo};
+use crate::{MainError, State};
 use bytes::Buf;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;

@@ -30,7 +30,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .highlight_style(Style::default().fg(Color::Yellow))
         .select(app.tabs.index);
 
-    let request_info = app
+    let main_info = app
         .state
         .messages
         .lock()
@@ -79,10 +79,10 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     f.render_widget(tabs, chunks[0]);
 
     match app.tabs.index {
-        0 => draw_first_tab(f, app, chunks[1], request_info),
+        0 => draw_first_tab(f, app, chunks[1], main_info),
         1 => draw_first_tab(f, app, chunks[1], response_info),
-        2 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
-        3 => draw_first_tab(f, app, chunks[1], request_info),
+        2 => draw_first_tab(f, app, chunks[1], loaded_rules_info),
+        3 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
         _ => {}
     };
 }

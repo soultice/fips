@@ -9,6 +9,7 @@ extern crate strum_macros;
 mod cli;
 mod client;
 mod configuration;
+mod debug;
 mod moxy;
 mod plugin;
 mod util;
@@ -44,6 +45,8 @@ use tui::{
     Terminal,
 };
 
+use debug::{PrintInfo, TrafficInfo};
+
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 enum Event<I> {
@@ -51,116 +54,11 @@ enum Event<I> {
     Tick,
 }
 
-#[derive(Debug)]
-pub struct ResponseInfo {
-    status: String,
-    version: String,
-    headers: HashMap<String, String>,
-}
-
-#[derive(Debug)]
-pub struct RequestInfo {
-    method: String,
-    uri: String,
-    version: String,
-    headers: HashMap<String, String>,
-}
-
-impl<'a> From<&ResponseInfo> for Spans<'a> {
-    fn from(response_info: &ResponseInfo) -> Spans<'a> {
-        let mut info_vec = vec![
-            Span::from(response_info.status.clone()),
-            Span::from(response_info.version.clone()),
-        ];
-        for (k, v) in &response_info.headers {
-            info_vec.push(Span::from(k.clone()));
-            info_vec.push(Span::from(v.clone()));
-        }
-        Spans::from(info_vec)
-    }
-}
-
-impl<'a> From<&RequestInfo> for Spans<'a> {
-    fn from(request_info: &RequestInfo) -> Spans<'a> {
-        let mut info_vec = vec![
-            Span::from(request_info.method.clone()),
-            Span::from(request_info.uri.clone()),
-            Span::from(request_info.version.clone()),
-        ];
-        for (k, v) in &request_info.headers {
-            info_vec.push(Span::from(k.clone()));
-            info_vec.push(Span::from("\n"));
-            info_vec.push(Span::from(v.clone()));
-        }
-        Spans::from(info_vec)
-    }
-}
-
-impl From<&Request<Body>> for RequestInfo {
-    fn from(request: &Request<Body>) -> RequestInfo {
-        let method = String::from(request.method().clone().as_str());
-        let uri = String::from(request.uri().clone().to_string());
-        let version = String::from(format!("{:?}", request.version().clone()));
-        let mut headers = HashMap::new();
-        for (k, v) in request.headers() {
-            headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
-            );
-        }
-        RequestInfo {
-            method,
-            uri,
-            version,
-            headers,
-        }
-    }
-}
-
-impl From<&Response<Body>> for ResponseInfo {
-    fn from(response: &Response<Body>) -> ResponseInfo {
-        let status = String::from(response.status().clone().as_str());
-        let version = String::from(format!("{:?}", response.version().clone()));
-        let mut headers = HashMap::new();
-        for (k, v) in response.headers() {
-            headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
-            );
-        }
-        ResponseInfo {
-            status,
-            version,
-            headers,
-        }
-    }
-}
-
-pub enum TrafficInfo {
-    INCOMING_REQUEST(RequestInfo),
-    OUTGOING_REQUEST(RequestInfo),
-    INCOMING_RESPONSE(ResponseInfo),
-    OUTGOING_RESPONSE(ResponseInfo),
-}
-
 pub struct State {
     messages: Mutex<Vec<PrintInfo>>,
     plugins: Mutex<ExternalFunctions>,
     configuration: Mutex<Configuration>,
     traffic_info: Mutex<Vec<TrafficInfo>>,
-}
-
-enum PrintInfo {
-    PLAIN(String),
-    MOXY(MoxyInfo),
-}
-
-struct MoxyInfo {
-    method: String,
-    path: String,
-    mode: String,
-    matching_rules: usize,
-    response_code: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,24 +79,6 @@ impl<S: ToString> From<S> for MainError {
         MainError::Other {
             msg: other.to_string(),
         }
-    }
-}
-
-impl<'a> From<&MoxyInfo> for Spans<'a> {
-    fn from(moxy_info: &MoxyInfo) -> Spans<'a> {
-        Spans::from(vec![
-            Span::from(moxy_info.method.to_owned()),
-            Span::from(" "),
-            Span::from("Mode: "),
-            Span::from(moxy_info.mode.to_owned()),
-            Span::from("=> "),
-            Span::from(moxy_info.response_code.to_owned()),
-            Span::from(" "),
-            Span::from("Matched Rules: "),
-            Span::from(moxy_info.matching_rules.to_owned().to_string()),
-            Span::from(" "),
-            Span::from(moxy_info.path.to_owned()),
-        ])
     }
 }
 
