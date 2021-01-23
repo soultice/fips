@@ -15,7 +15,12 @@ impl<'a> App<'a> {
     pub fn new(enhanced_graphics: bool, state: Arc<State>, opts: Opts) -> App<'a> {
         App {
             should_quit: false,
-            tabs: TabsState::new(vec!["Requests", "Rules", "Plugins"]),
+            tabs: TabsState::new(vec![
+                "Requests",
+                "Traffic",
+                "Loaded Rules",
+                "Loaded Plugins",
+            ]),
             show_chart: true,
             enhanced_graphics,
             state,

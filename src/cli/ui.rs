@@ -1,5 +1,5 @@
 use crate::cli::App;
-use crate::PrintInfo;
+use crate::{PrintInfo, TrafficInfo};
 use futures::StreamExt;
 use tui::{
     backend::Backend,
@@ -61,12 +61,28 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .map(|e| Spans::from(Span::from(e.clone())))
         .collect();
 
+    let response_info: Vec<Spans> = app
+        .state
+        .traffic_info
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|i| match i {
+            TrafficInfo::OUTGOING_RESPONSE(i) => Spans::from(i),
+            TrafficInfo::INCOMING_RESPONSE(i) => Spans::from(i),
+            TrafficInfo::OUTGOING_REQUEST(i) => Spans::from(i),
+            TrafficInfo::INCOMING_REQUEST(i) => Spans::from(i),
+            _ => Spans::from(""),
+        })
+        .collect();
+
     f.render_widget(tabs, chunks[0]);
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], request_info),
-        1 => draw_first_tab(f, app, chunks[1], loaded_rules_info),
+        1 => draw_first_tab(f, app, chunks[1], response_info),
         2 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
+        3 => draw_first_tab(f, app, chunks[1], request_info),
         _ => {}
     };
 }

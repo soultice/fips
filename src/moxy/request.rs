@@ -13,7 +13,7 @@ use std::sync::Arc;
 pub async fn moxy<'r>(
     body: Body,
     parts: hyper::http::request::Parts,
-    state: Arc<State>,
+    state: &Arc<State>,
 ) -> Result<Response<Body>, MainError> {
     let method = &parts.method;
     let uri = &parts.uri;
@@ -50,10 +50,11 @@ pub async fn moxy<'r>(
                         parts: &parts,
                     };
 
-                    let (client_parts, mut resp_json) = client.response().await?;
+                    let (client_parts, mut resp_json) = client.response(state).await?;
 
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
+                    // Apply transformation from rules
                     if let Some(rules) = &first_matched_rule.rules {
                         for rule in rules {
                             resp_json.dot_set(&rule.path, rule.item.clone())?;
@@ -77,6 +78,7 @@ pub async fn moxy<'r>(
                 }
             };
 
+            // Keep these headers from the original response
             if let Some(backward_headers) = &first_matched_rule.backward_headers {
                 let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
                 for header_name in backward_headers {
@@ -96,6 +98,7 @@ pub async fn moxy<'r>(
                 }
             }
 
+            // Add headers to response
             if let Some(headers) = &first_matched_rule.headers {
                 for header in headers {
                     let header_name = HeaderName::from_str(header.0)?;
@@ -106,6 +109,7 @@ pub async fn moxy<'r>(
                 }
             }
 
+            // Add or change response status
             if let Some(response_status) = &first_matched_rule.response_status {
                 *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
             }

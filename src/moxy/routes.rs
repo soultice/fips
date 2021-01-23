@@ -1,10 +1,17 @@
 use super::request::moxy;
-use crate::State;
+use crate::{RequestInfo, ResponseInfo, State, TrafficInfo};
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response};
 use std::sync::Arc;
 
 pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
+    let req_info = RequestInfo::from(&req);
+    state
+        .traffic_info
+        .lock()
+        .unwrap()
+        .push(TrafficInfo::INCOMING_REQUEST(req_info));
+
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
 
@@ -21,12 +28,19 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                 "Access-Control-Allow-Methods",
                 HeaderValue::from_static("*"),
             );
+            let response_info = ResponseInfo::from(&new_response);
             Ok(new_response)
         }
 
         _ => {
             let (parts, body) = req.into_parts();
-            let resp: Response<Body> = moxy(body, parts, state).await.unwrap();
+            let resp: Response<Body> = moxy(body, parts, &state).await.unwrap();
+            let response_info = ResponseInfo::from(&resp);
+            state
+                .traffic_info
+                .lock()
+                .unwrap()
+                .push(TrafficInfo::OUTGOING_RESPONSE(response_info));
             Ok(resp)
         }
     }

@@ -1,7 +1,9 @@
 use crate::bytes::Buf;
+use crate::{RequestInfo, ResponseInfo, State, TrafficInfo};
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::io::Read;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct AppClient<'a> {
@@ -26,7 +28,10 @@ impl<S: ToString> From<S> for ClientError {
 }
 
 impl<'a> AppClient<'a> {
-    pub async fn response(&mut self) -> Result<(Parts, serde_json::Value), ClientError> {
+    pub async fn response(
+        &mut self,
+        state: &Arc<State>,
+    ) -> Result<(Parts, serde_json::Value), ClientError> {
         let client = Client::new();
         let body = Body::from(self.body.clone());
         let mut client_req = hyper::Request::builder()
@@ -45,7 +50,22 @@ impl<'a> AppClient<'a> {
             }
         }
 
+        let outgoing_request_info = RequestInfo::from(&client_req);
+        state
+            .traffic_info
+            .lock()
+            .unwrap()
+            .push(TrafficInfo::OUTGOING_REQUEST(outgoing_request_info));
+
         let client_res = client.request(client_req).await?;
+
+        let incoming_response_info = ResponseInfo::from(&client_res);
+        state
+            .traffic_info
+            .lock()
+            .unwrap()
+            .push(TrafficInfo::INCOMING_RESPONSE(incoming_response_info));
+
         let (mut client_parts, client_body) = client_res.into_parts();
 
         //hyper creates them automatically and crashes in case of a mismatch, so removing them is the easiest way
