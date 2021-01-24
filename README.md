@@ -14,10 +14,27 @@ Binaries for Linux and Windows are attached to each release on the release page.
 - Checkout this repo.
 - Dir into it and run `cargo run` - or `cargo build` if you wish to produce an executable.
 
+## Cli Arguments
+Also see `moxy(.exe) --help`
+```yaml
+  # Start moxy on this Port
+  --port: 8888
+  # Load plugins from this directory, detault is the current directory.
+  --plugins: .
+  # Load configuration files from this directory. default is the current directory.
+  --config: .
+```
+
+## Hotkeys:
+<kdb>Tab</kdb> Go to next Tab
+<kdb>Shift</kdb>Tab</kdb> Go to previous Tab
+<kdb>c</kdb> clear the log output
+<kdb>r</kdb> reload config files
+
 ## Usage
 
-Moxys configuration is placed alongside the executable in a `config.yaml` file.
-For each request, moxy will check against the `config.yaml` if any config object matches the current request URI.
+Moxys configuration is placed in `.yaml` files they are loaded at startup from the `--config` directory.
+For each request, moxy will check against the `.yaml` files if any config object matches the current request URI.
 If it does, one of the three modes do apply implicitly by the configuration given.
 
 | Mode  | forwardUri | rules |
@@ -35,6 +52,13 @@ Meaning if you've set `forwardUri` but havent set any `rules`, then moxy will fu
 - Rules are applied in the order they appear - so order matters.
 - The config file is not checked for spelling.
 - Object manipulation uses the [dotpath crate](dotpath). The syntax is noted below.
+- If you wish to mock a request without any body (e.g. only the response status matters) you still need to provide `path` and `rules`, you can do so with 
+  ```yaml
+  path: ^/foo/$
+  rules:
+    path:
+    item:
+  ```
 
 ## Example configuration in `config.yaml`
 
@@ -45,7 +69,7 @@ See also the `examples` directory for more example configurations.
 ```yaml
 - path: ^/foo/bar/$
   rules:
-    - path: ''
+    - path: 
       item: ['this is a lot of fun']
 ```
 
@@ -75,7 +99,33 @@ See also the `examples` directory for more example configurations.
     }
 ```
 
-## All configuration possibilities TBD
+## All configuration parameters 
+
+Main configuration:
+```yaml
+    # A a regex to match incoming requests. if a match is found, this rule will be applied
+    path: String
+    # Moxy will change the response status to this value
+    responseStatus: u16,
+    # Forward any incoming request to this uri and return the response
+    forwardUri: String
+    # Forward matching headers on the request
+    forwardHeaders: Vec<String>
+    # Return these headers from the original response
+    backwardHeaders: Vec<String>,
+    # Add these headers to the response
+    headers: HashMap<String, String>,
+    # Transform the Response according to these rules
+    rules: Vec<Rule>,
+```
+Rules:
+```yaml
+   # The json_dotpath (see more at Object manipulation on the response)
+   path: String,
+   # Any json serializeable item that is added to the response at the paths location
+   item: Serde<Value>
+```
+
 
 ## Object manipulation on the response
 
@@ -99,8 +149,6 @@ See also the `examples` directory for more example configurations.
 - <n, e.g. <5 ... insert before the n-th element
 - \>n, e.g. >5 ... insert after the n-th element
 
-## Faker TBD
-
 ## Extension
 
 One of moxys key features is its extension system. Moxy exports a rust macro `export_plugin`.
@@ -111,49 +159,55 @@ with the output of your plugin. All plugins matching your OS in the `plugins` di
 Example plugin implementation:
 
 ```rust
-use moxy;
 use moxy::{PluginRegistrar, Function, InvocationError};
+use fake::{faker::name::raw::NameWithTitle, locales::EN, Fake};
 
 pub struct Random;
 
 impl Function for Random {
     fn call(&self, args: &[f64]) -> Result<String, InvocationError> {
-        // do something here -e.g. make a request against an api to retrieve a value.
-        Ok("{\"foo\" : [\"bar\"]}".to_owned())
+        let random_fake_name: String = NameWithTitle(EN).fake();
+        let json_serializable = format!("{{\"bar\": [\"{}\"]}}", random_fake_name).to_owned();
+        Ok(json_serializable)
     }
 }
 
 moxy::export_plugin!(register);
 
 extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
-    registrar.register_function("{{UUID}}", Box::new(Random));
+    registrar.register_function("{{Name}}", Box::new(Random));
 }
 ```
+
 Above code registers the plugin on the moxy plugin registry.  The name `{{UUID}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
 
 Example `config.yaml`
 
 ```yaml
-- path: ^/final/$
+- path: ^/randomname/$
   rules:
-    - path: ''
+    - path: 
       item:
-        foo: '{{UUID}}'
+        foo: '{{Name}}'
 ```
 
-Example output of `curl localhost:8888 | jq`
+Example output of `curl localhost:8888/randomname/ | jq`
 
 ```json
 {
   "foo": {
-    "foo": ["bar"]
+    "bar": ["Ms. Destiney Metz"]
   }
 }
 ```
 
-## Contribution TBD
+## Contributing 
 
-## License TBD
+Please read the [Contributing File](CONTRIBUTING.md)
+
+## License 
+
+This Project is Licensed under the [MIT License](LICENSE)
 
 [cargo]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 [dotpath]: https://crates.io/crates/json_dotpath
