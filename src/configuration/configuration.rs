@@ -6,7 +6,6 @@ use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{fs, io};
@@ -79,7 +78,7 @@ impl Configuration {
             rule_collection: Vec::new(),
             loaded_paths: Vec::new(),
         };
-        rules.load_from_path(path_to_config);
+        rules.load_from_path(path_to_config).unwrap();
         rules
     }
 

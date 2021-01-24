@@ -1,8 +1,6 @@
 use crate::cli::App;
-use crate::configuration::Configuration;
-use crate::{Opts, PrintInfo, State};
+use crate::PrintInfo;
 use crossterm::event::KeyCode;
-use std::sync::Arc;
 
 pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     match code {
@@ -10,12 +8,12 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            app.state.configuration.lock().unwrap().reload();
+            app.state.configuration.lock().unwrap().reload()?;
             app.state
                 .messages
                 .lock()
                 .unwrap()
-                .push(PrintInfo::PLAIN(String::from("Config files reloaded")))
+                .insert(0, PrintInfo::PLAIN(String::from("Config files reloaded")))
         }
         KeyCode::Char('c') => {
             *app.state.messages.lock().unwrap() = Vec::new();

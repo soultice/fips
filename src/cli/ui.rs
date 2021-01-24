@@ -1,6 +1,5 @@
 use crate::cli::App;
 use crate::{PrintInfo, State, TrafficInfo};
-use futures::StreamExt;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tui::{
@@ -112,10 +111,10 @@ where
         .iter()
         .map(|traffic_info| {
             let text = match traffic_info {
-                TrafficInfo::OUTGOING_RESPONSE(i) => Text::from(i),
-                TrafficInfo::INCOMING_RESPONSE(i) => Text::from(i),
-                TrafficInfo::OUTGOING_REQUEST(i) => Text::from(i),
-                TrafficInfo::INCOMING_REQUEST(i) => Text::from(i),
+                TrafficInfo::OutgoingResponse(i) => Text::from(i),
+                TrafficInfo::IncomingResponse(i) => Text::from(i),
+                TrafficInfo::OutgoingRequest(i) => Text::from(i),
+                TrafficInfo::IncomingRequest(i) => Text::from(i),
             };
             text
         })
@@ -134,10 +133,8 @@ where
 
     for (i, traffic_info) in response_info.iter().enumerate() {
         let title = match traffic_info {
-            TrafficInfo::OUTGOING_RESPONSE(i) | TrafficInfo::INCOMING_RESPONSE(i) => {
-                &i.response_type
-            }
-            TrafficInfo::OUTGOING_REQUEST(i) | TrafficInfo::INCOMING_REQUEST(i) => &i.request_type,
+            TrafficInfo::OutgoingResponse(i) | TrafficInfo::IncomingResponse(i) => &i.response_type,
+            TrafficInfo::OutgoingRequest(i) | TrafficInfo::IncomingRequest(i) => &i.request_type,
         };
         let block = Block::default().borders(Borders::ALL).title(Span::styled(
             title,

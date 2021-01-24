@@ -26,24 +26,19 @@ use crossterm::{
 };
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Response, Server,
+    Body, Request, Server,
 };
 use plugin::ExternalFunctions;
-use std::collections::HashMap;
-use std::panic;
 use std::{
     io::{stdout, Write},
+    panic,
     path::PathBuf,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
-use tui::{
-    backend::CrosstermBackend,
-    text::{Span, Spans},
-    Terminal,
-};
+use tui::{backend::CrosstermBackend, Terminal};
 
 use debug::{PrintInfo, TrafficInfo};
 
@@ -164,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             foo.messages
                 .lock()
                 .unwrap()
-                .push(PrintInfo::PLAIN(panic_info.to_string()))
+                .insert(0, PrintInfo::PLAIN(panic_info.to_string()))
         })
     });
 

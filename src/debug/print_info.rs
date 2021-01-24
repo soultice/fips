@@ -4,10 +4,10 @@ use tui::text::{Span, Spans, Text};
 
 #[derive(Clone)]
 pub enum TrafficInfo {
-    INCOMING_REQUEST(RequestInfo),
-    OUTGOING_REQUEST(RequestInfo),
-    INCOMING_RESPONSE(ResponseInfo),
-    OUTGOING_RESPONSE(ResponseInfo),
+    IncomingRequest(RequestInfo),
+    OutgoingRequest(RequestInfo),
+    IncomingResponse(ResponseInfo),
+    OutgoingResponse(ResponseInfo),
 }
 
 #[derive(Debug, Clone)]
@@ -16,21 +16,6 @@ pub struct ResponseInfo {
     status: String,
     version: String,
     headers: HashMap<String, String>,
-}
-
-impl<'a> From<&ResponseInfo> for Spans<'a> {
-    fn from(response_info: &ResponseInfo) -> Spans<'a> {
-        let mut info_vec = vec![
-            Span::from(response_info.status.clone()),
-            Span::from(response_info.version.clone()),
-        ];
-        for (k, v) in &response_info.headers {
-            info_vec.push(Span::from(k.clone()));
-            info_vec.push(Span::from("\n"));
-            info_vec.push(Span::from(v.clone()));
-        }
-        Spans::from(info_vec)
-    }
 }
 
 impl<'a> From<&ResponseInfo> for Text<'a> {
@@ -75,22 +60,6 @@ pub struct RequestInfo {
     uri: String,
     version: String,
     headers: HashMap<String, String>,
-}
-
-impl<'a> From<&RequestInfo> for Spans<'a> {
-    fn from(request_info: &RequestInfo) -> Spans<'a> {
-        let mut info_vec = vec![
-            Span::from(request_info.method.clone()),
-            Span::from(request_info.uri.clone()),
-            Span::from(request_info.version.clone()),
-        ];
-        for (k, v) in &request_info.headers {
-            info_vec.push(Span::from(k.clone()));
-            info_vec.push(Span::from("\n"));
-            info_vec.push(Span::from(v.clone()));
-        }
-        Spans::from(info_vec)
-    }
 }
 
 impl<'a> From<&RequestInfo> for Text<'a> {

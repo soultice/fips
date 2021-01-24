@@ -57,7 +57,7 @@ impl<'a> AppClient<'a> {
             .traffic_info
             .lock()
             .unwrap()
-            .push(TrafficInfo::OUTGOING_REQUEST(outgoing_request_info));
+            .insert(0, TrafficInfo::OutgoingRequest(outgoing_request_info));
 
         let client_res = client.request(client_req).await?;
 
@@ -68,7 +68,7 @@ impl<'a> AppClient<'a> {
             .traffic_info
             .lock()
             .unwrap()
-            .push(TrafficInfo::INCOMING_RESPONSE(incoming_response_info));
+            .insert(0, TrafficInfo::IncomingResponse(incoming_response_info));
 
         let (mut client_parts, client_body) = client_res.into_parts();
 

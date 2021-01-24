@@ -13,7 +13,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
         .traffic_info
         .lock()
         .unwrap()
-        .push(TrafficInfo::INCOMING_REQUEST(req_info));
+        .insert(0, TrafficInfo::IncomingRequest(req_info));
 
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
@@ -31,7 +31,6 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                 "Access-Control-Allow-Methods",
                 HeaderValue::from_static("*"),
             );
-            let response_info = ResponseInfo::from(&new_response);
             Ok(new_response)
         }
 
@@ -44,7 +43,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                 .traffic_info
                 .lock()
                 .unwrap()
-                .push(TrafficInfo::OUTGOING_RESPONSE(response_info));
+                .insert(0, TrafficInfo::OutgoingResponse(response_info));
             Ok(resp)
         }
     }

@@ -31,7 +31,7 @@ pub struct ExternalFunctions {
 impl ExternalFunctions {
     pub fn new(path_to_plugins: &PathBuf) -> ExternalFunctions {
         let mut default = ExternalFunctions::default();
-        default.load_from_path(path_to_plugins);
+        default.load_from_path(path_to_plugins).unwrap();
         default
     }
 
