@@ -51,7 +51,8 @@ impl<'a> AppClient<'a> {
             }
         }
 
-        let outgoing_request_info = RequestInfo::from(&client_req);
+        let mut outgoing_request_info = RequestInfo::from(&client_req);
+        outgoing_request_info.request_type = String::from("Request to Server");
         state
             .traffic_info
             .lock()
@@ -60,7 +61,9 @@ impl<'a> AppClient<'a> {
 
         let client_res = client.request(client_req).await?;
 
-        let incoming_response_info = ResponseInfo::from(&client_res);
+        let mut incoming_response_info = ResponseInfo::from(&client_res);
+        incoming_response_info.response_type = String::from("Response From Server");
+
         state
             .traffic_info
             .lock()

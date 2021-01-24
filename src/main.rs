@@ -99,14 +99,13 @@ pub struct Opts {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
-    let mut plugins = ExternalFunctions::new(&opts.plugins);
-
-    let runtime = Runtime::new().unwrap();
+    let plugins = ExternalFunctions::new(&opts.plugins);
+    let configuration = Configuration::new(&opts.config);
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
         plugins: Mutex::new(plugins),
-        configuration: Mutex::new(Configuration::new(&opts.config)),
+        configuration: Mutex::new(configuration),
         traffic_info: Mutex::new(vec![]),
     });
 
@@ -125,6 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let runtime = Runtime::new().unwrap();
     runtime.spawn(Server::bind(&addr).serve(make_svc));
 
     enable_raw_mode()?;

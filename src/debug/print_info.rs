@@ -1,7 +1,8 @@
 use hyper::{Body, Request, Response};
 use std::collections::HashMap;
-use tui::text::{Span, Spans};
+use tui::text::{Span, Spans, Text};
 
+#[derive(Clone)]
 pub enum TrafficInfo {
     INCOMING_REQUEST(RequestInfo),
     OUTGOING_REQUEST(RequestInfo),
@@ -9,8 +10,9 @@ pub enum TrafficInfo {
     OUTGOING_RESPONSE(ResponseInfo),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResponseInfo {
+    pub response_type: String,
     status: String,
     version: String,
     headers: HashMap<String, String>,
@@ -24,9 +26,25 @@ impl<'a> From<&ResponseInfo> for Spans<'a> {
         ];
         for (k, v) in &response_info.headers {
             info_vec.push(Span::from(k.clone()));
+            info_vec.push(Span::from("\n"));
             info_vec.push(Span::from(v.clone()));
         }
         Spans::from(info_vec)
+    }
+}
+
+impl<'a> From<&ResponseInfo> for Text<'a> {
+    fn from(request_info: &ResponseInfo) -> Text<'a> {
+        let mut text = String::from(&request_info.status);
+        text.push_str(" ");
+        text.push_str(&request_info.version);
+        for (k, v) in &request_info.headers {
+            text += "\n";
+            text += &k;
+            text += " : ";
+            text += &v;
+        }
+        Text::from(text)
     }
 }
 
@@ -42,6 +60,7 @@ impl From<&Response<Body>> for ResponseInfo {
             );
         }
         ResponseInfo {
+            response_type: String::from("placeholder"),
             status,
             version,
             headers,
@@ -49,8 +68,9 @@ impl From<&Response<Body>> for ResponseInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RequestInfo {
+    pub request_type: String,
     method: String,
     uri: String,
     version: String,
@@ -73,6 +93,23 @@ impl<'a> From<&RequestInfo> for Spans<'a> {
     }
 }
 
+impl<'a> From<&RequestInfo> for Text<'a> {
+    fn from(request_info: &RequestInfo) -> Text<'a> {
+        let mut text = String::from(&request_info.method);
+        text.push_str(" ");
+        text.push_str(&request_info.uri);
+        text.push_str(" ");
+        text.push_str(&request_info.version);
+        for (k, v) in &request_info.headers {
+            text += "\n";
+            text += &k;
+            text += " : ";
+            text += &v;
+        }
+        Text::from(text)
+    }
+}
+
 impl From<&Request<Body>> for RequestInfo {
     fn from(request: &Request<Body>) -> RequestInfo {
         let method = String::from(request.method().clone().as_str());
@@ -86,6 +123,7 @@ impl From<&Request<Body>> for RequestInfo {
             );
         }
         RequestInfo {
+            request_type: String::from("placeholder"),
             method,
             uri,
             version,
