@@ -81,7 +81,7 @@ impl<S: ToString> From<S> for MainError {
 #[clap(version = VERSION, author = "Florian Pfingstag")]
 pub struct Opts {
     /// The directory from where to load config files
-    #[clap(short, long, default_value = "./config")]
+    #[clap(short, long, default_value = ".")]
     config: PathBuf,
     /// The directory from where to load plugins
     #[clap(long, default_value = ".")]

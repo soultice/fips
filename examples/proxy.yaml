@@ -1,0 +1,3 @@
+- path: ^/final/$
+  forwardUri:
+    "http://localhost:8888/users"
