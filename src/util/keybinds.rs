@@ -17,6 +17,7 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
         }
         KeyCode::Char('c') => {
             *app.state.messages.lock().unwrap() = Vec::new();
+            *app.state.traffic_info.lock().unwrap() = Vec::new();
         }
         KeyCode::Char(_c) => {}
         KeyCode::BackTab => app.on_left(),

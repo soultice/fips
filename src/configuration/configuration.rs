@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
 use crate::plugin::ExternalFunctions;
-use fake::{faker::name::raw::*, locales::*, Fake};
 use hyper::Uri;
 use regex::RegexSet;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -138,13 +136,9 @@ impl Configuration {
 fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) {
     match value {
         serde_json::Value::String(val) => match val.as_str() {
-            "{{Name}}" => {
-                *val = Name(EN).fake();
-            }
             _ => {
                 if plugins.has(val) {
                     let result = plugins.call(&val, &[1.0]).expect("Invocation failed");
-                    //*val = result.clone();
                     let try_serialize = serde_json::from_str(&result.clone());
                     if let Ok(i) = try_serialize {
                         *value = i;

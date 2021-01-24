@@ -63,10 +63,12 @@ pub async fn moxy<'r>(
                     }
 
                     let final_response_string = serde_json::to_string(&resp_json)?;
-                    let returned_response = Response::from_parts(
-                        client_parts,
-                        Body::from(final_response_string.clone()),
-                    );
+                    let returned_response = match final_response_string {
+                        s if s.is_empty() => {
+                            Response::from_parts(client_parts, Body::from(Body::default()))
+                        }
+                        s => Response::from_parts(client_parts, Body::from(s.clone())),
+                    };
                     returned_response
                 }
                 _ => {
