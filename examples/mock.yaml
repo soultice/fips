@@ -1,8 +1,8 @@
-- path: ^/mock/$
+- path: ^/mock/final/$
   headers:
     x-app-name: moxy
   rules:
-    - path: ''
+    - path:
       item:
         users:
           - name: rick
