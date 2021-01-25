@@ -109,33 +109,20 @@ where
 
     let text: Vec<Text> = response_info
         .iter()
-        .map(|traffic_info| {
-            let text = match traffic_info {
-                TrafficInfo::OutgoingResponse(i) => Text::from(i),
-                TrafficInfo::IncomingResponse(i) => Text::from(i),
-                TrafficInfo::OutgoingRequest(i) => Text::from(i),
-                TrafficInfo::IncomingRequest(i) => Text::from(i),
-            };
-            text
-        })
+        .map(|traffic_info| Text::from(traffic_info))
         .collect();
 
     let mut constraints: Vec<Constraint> = text
         .iter()
-        .map(|t| Constraint::Min(u16::try_from(t.lines.len() + 2).unwrap()))
+        .map(|t| Constraint::Max(u16::try_from(t.lines.len() + 2).unwrap()))
         .collect();
-
-    constraints.push(Constraint::Min(1));
 
     let chunks = Layout::default()
         .constraints(constraints.as_ref())
         .split(area);
 
     for (i, traffic_info) in response_info.iter().enumerate() {
-        let title = match traffic_info {
-            TrafficInfo::OutgoingResponse(i) | TrafficInfo::IncomingResponse(i) => &i.response_type,
-            TrafficInfo::OutgoingRequest(i) | TrafficInfo::IncomingRequest(i) => &i.request_type,
-        };
+        let title = traffic_info.to_string();
         let block = Block::default().borders(Borders::ALL).title(Span::styled(
             title,
             Style::default()

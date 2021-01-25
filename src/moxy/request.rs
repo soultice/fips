@@ -120,16 +120,15 @@ pub async fn moxy<'r>(
         }
     };
 
-    state.messages.lock().unwrap().insert(
-        0,
-        PrintInfo::MOXY(MoxyInfo {
+    state
+        .add_message(PrintInfo::MOXY(MoxyInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),
             matching_rules: matches.len(),
             response_code: returned_response.status().to_string(),
-        }),
-    );
+        }))
+        .unwrap_or_default();
 
     returned_response
         .headers_mut()

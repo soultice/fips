@@ -10,10 +10,8 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
         KeyCode::Char('r') => {
             app.state.configuration.lock().unwrap().reload()?;
             app.state
-                .messages
-                .lock()
-                .unwrap()
-                .insert(0, PrintInfo::PLAIN(String::from("Config files reloaded")))
+                .add_message(PrintInfo::PLAIN(String::from("Config files reloaded")))
+                .unwrap_or_default();
         }
         KeyCode::Char('c') => {
             *app.state.messages.lock().unwrap() = Vec::new();

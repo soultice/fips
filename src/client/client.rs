@@ -51,24 +51,17 @@ impl<'a> AppClient<'a> {
             }
         }
 
-        let mut outgoing_request_info = RequestInfo::from(&client_req);
-        outgoing_request_info.request_type = String::from("Request to Server");
+        let outgoing_request_info = RequestInfo::from(&client_req);
         state
-            .traffic_info
-            .lock()
-            .unwrap()
-            .insert(0, TrafficInfo::OutgoingRequest(outgoing_request_info));
+            .add_traffic_info(TrafficInfo::OutgoingRequest(outgoing_request_info))
+            .unwrap_or_default();
 
         let client_res = client.request(client_req).await?;
 
-        let mut incoming_response_info = ResponseInfo::from(&client_res);
-        incoming_response_info.response_type = String::from("Response From Server");
-
+        let incoming_response_info = ResponseInfo::from(&client_res);
         state
-            .traffic_info
-            .lock()
-            .unwrap()
-            .insert(0, TrafficInfo::IncomingResponse(incoming_response_info));
+            .add_traffic_info(TrafficInfo::IncomingResponse(incoming_response_info))
+            .unwrap_or_default();
 
         let (mut client_parts, client_body) = client_res.into_parts();
 

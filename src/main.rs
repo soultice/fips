@@ -56,6 +56,28 @@ pub struct State {
     traffic_info: Mutex<Vec<TrafficInfo>>,
 }
 
+impl State {
+    pub fn add_traffic_info(&self, traffic_info: TrafficInfo) -> Result<(), MainError> {
+        if let Ok(mut traffic) = self.traffic_info.lock() {
+            traffic.insert(0, traffic_info);
+            if traffic.len() > 20 {
+                traffic.pop();
+            }
+        }
+        Ok(())
+    }
+
+    pub fn add_message(&self, message: PrintInfo) -> Result<(), MainError> {
+        if let Ok(mut messages) = self.messages.lock() {
+            messages.insert(0, message);
+            if messages.len() > 200 {
+                messages.pop();
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum MainError {
     Other { msg: String },
@@ -154,12 +176,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     panic::set_hook({
-        let foo = app.state.clone();
+        let captured_state = app.state.clone();
         Box::new(move |panic_info| {
-            foo.messages
-                .lock()
-                .unwrap()
-                .insert(0, PrintInfo::PLAIN(panic_info.to_string()))
+            captured_state
+                .add_message(PrintInfo::PLAIN(panic_info.to_string()))
+                .unwrap_or_default();
         })
     });
 

@@ -6,14 +6,10 @@ use hyper::{Body, Method, Request, Response};
 use std::sync::Arc;
 
 pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
-    let mut req_info = RequestInfo::from(&req);
-    req_info.request_type = String::from("Request To Moxy");
-
+    let req_info = RequestInfo::from(&req);
     state
-        .traffic_info
-        .lock()
-        .unwrap()
-        .insert(0, TrafficInfo::IncomingRequest(req_info));
+        .add_traffic_info(TrafficInfo::IncomingRequest(req_info))
+        .unwrap_or_default();
 
     match (req.method(), req.uri().path()) {
         (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
@@ -37,13 +33,10 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
         _ => {
             let (parts, body) = req.into_parts();
             let resp: Response<Body> = moxy(body, parts, &state).await.unwrap();
-            let mut response_info = ResponseInfo::from(&resp);
-            response_info.response_type = String::from("Returned By Moxy");
+            let response_info = ResponseInfo::from(&resp);
             state
-                .traffic_info
-                .lock()
-                .unwrap()
-                .insert(0, TrafficInfo::OutgoingResponse(response_info));
+                .add_traffic_info(TrafficInfo::OutgoingResponse(response_info))
+                .unwrap_or_default();
             Ok(resp)
         }
     }
