@@ -20,8 +20,9 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
         KeyCode::Char(_c) => {}
         KeyCode::BackTab => app.on_left(),
         KeyCode::Tab => app.on_right(),
-        KeyCode::Up => app.on_up(),
-        KeyCode::Down => app.on_down(),
+        KeyCode::Enter => app.state.configuration.lock().unwrap().toggle_rule(),
+        KeyCode::Down => app.state.configuration.lock().unwrap().select_next(),
+        KeyCode::Up => app.state.configuration.lock().unwrap().select_prev(),
         _ => {}
     }
     Ok(())

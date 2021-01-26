@@ -7,7 +7,7 @@ use tui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph, Tabs, Wrap},
+    widgets::{Block, Borders, List, Paragraph, Tabs, Wrap},
     Frame,
 };
 
@@ -45,16 +45,6 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         })
         .collect();
 
-    let loaded_rules_info: Vec<Spans> = app
-        .state
-        .configuration
-        .lock()
-        .unwrap()
-        .paths()
-        .iter()
-        .map(|p| Spans::from(Span::from(p.clone())))
-        .collect();
-
     let loaded_plugins_info: Vec<Spans> = app
         .state
         .plugins
@@ -68,8 +58,8 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], main_info),
-        1 => draw_info_tab(f, app, chunks[1], &app.state.clone()),
-        2 => draw_first_tab(f, app, chunks[1], loaded_rules_info),
+        1 => draw_info_tab(f, app, chunks[1], Arc::clone(&app.state)),
+        2 => draw_rules_tab(f, app, chunks[1], Arc::clone(&app.state)),
         3 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
         _ => {}
     };
@@ -101,7 +91,27 @@ where
     f.render_widget(paragraph, area);
 }
 
-fn draw_info_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: &Arc<State>)
+fn draw_rules_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: Arc<State>)
+where
+    B: Backend,
+{
+    let block = Block::default().borders(Borders::ALL).title(Span::styled(
+        "Select Rules",
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
+    ));
+    let constraints = vec![Constraint::Min(5)];
+    let chunks = Layout::default()
+        .constraints(constraints.as_ref())
+        .split(area);
+
+    let list = List::from(&state.configuration.lock().unwrap().clone()).block(block);
+
+    f.render_widget(list, chunks[0])
+}
+
+fn draw_info_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: Arc<State>)
 where
     B: Backend,
 {

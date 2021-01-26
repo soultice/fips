@@ -18,7 +18,11 @@ pub async fn moxy<'r>(
 ) -> Result<Response<Body>, MainError> {
     let method = &parts.method;
     let uri = &parts.uri;
-    let matches = state.configuration.lock().unwrap().matching_rules(&uri);
+    let matches = state
+        .configuration
+        .lock()
+        .unwrap()
+        .active_matching_rules(&uri);
 
     let (mut returned_response, mode) = match matches.len() {
         0 => {

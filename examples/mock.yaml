@@ -1,4 +1,5 @@
-- path: ^/mock/final/$
+- path: ^/mock/foo/$
+  active: true
   headers:
     x-app-name: moxy
   rules:
