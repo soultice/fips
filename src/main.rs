@@ -37,10 +37,12 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 use tui::{backend::CrosstermBackend, Terminal};
 
 use debug::{PrintInfo, TrafficInfo};
+use std::net::SocketAddr;
+use tokio::task::JoinHandle;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -114,6 +116,22 @@ pub struct Opts {
     headless: bool,
 }
 
+fn spawn_server(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Result<()>> {
+    let capture_state = Arc::clone(state);
+    let make_svc = make_service_fn(move |_| {
+        let inner_capture = Arc::clone(&capture_state);
+        async move {
+            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
+                let route_capture = Arc::clone(&inner_capture);
+                async move { moxy::routes(req, route_capture).await }
+            }))
+        }
+    });
+
+    let handle = tokio::spawn(Server::bind(addr).serve(make_svc));
+    handle
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
@@ -131,20 +149,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(true, state, opts.clone());
 
     let addr = ([127, 0, 0, 1], opts.port).into();
-
-    let capture_state = Arc::clone(&app.state);
-    let make_svc = make_service_fn(move |_| {
-        let inner_capture = Arc::clone(&capture_state);
-        async move {
-            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
-                let route_capture = Arc::clone(&inner_capture);
-                async move { moxy::routes(req, route_capture).await }
-            }))
-        }
-    });
-
     let runtime = Runtime::new().unwrap();
-    let handle = runtime.spawn(Server::bind(&addr).serve(make_svc));
+    let _guard = runtime.enter();
+    let rt_handle = spawn_server(&app.state, &addr);
 
     if !opts.headless {
         enable_raw_mode()?;
@@ -209,7 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         println!("server is running");
-        handle.await?.unwrap();
+        rt_handle.await?.unwrap();
     }
 
     Ok(())
