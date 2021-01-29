@@ -221,3 +221,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use bytes::Buf;
+    use hyper::{Client, Method, Request};
+    use json_dotpath::DotPaths;
+
+    #[tokio::test]
+    async fn all_functions_work() -> Result<(), String> {
+        let opts = Opts {
+            config: PathBuf::from("./test/configuration_files"),
+            plugins: PathBuf::from("./plugins"),
+            port: 8888,
+            headless: false,
+        };
+        let plugins = ExternalFunctions::new(&opts.plugins);
+        let configuration = Configuration::new(&opts.config);
+
+        let state = Arc::new(State {
+            messages: Mutex::new(Vec::new()),
+            plugins: Mutex::new(plugins),
+            configuration: Mutex::new(configuration),
+            traffic_info: Mutex::new(vec![]),
+        });
+
+        let mut app = App::new(true, state, opts.clone());
+
+        let addr = ([127, 0, 0, 1], opts.port).into();
+        let runtime = Runtime::new().unwrap();
+        let _guard = runtime.enter();
+        let rt_handle = spawn_server(&app.state, &addr);
+
+        let client = Client::new();
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:8888/final/")
+            .body(Body::default())
+            .unwrap();
+
+        let res = client.request(req).await.unwrap();
+
+        let (parts, body) = res.into_parts();
+        let body = hyper::body::aggregate(body).await.unwrap().reader();
+        let body: serde_json::Value = serde_json::from_reader(body).unwrap();
+
+        runtime.shutdown_background();
+        match body {
+            serde_json::Value::Object(b) => {
+                let mut pattern_has_been_replaced = false;
+                if let Some(path_value) = b.dot_get::<serde_json::Value>("users.0.foo").unwrap() {
+                    if path_value != serde_json::Value::String(String::from("{{Name}}")) {
+                        pattern_has_been_replaced = true;
+                    }
+                }
+                if pattern_has_been_replaced {
+                    Ok(())
+                } else {
+                    Err(String::from("Response path does not match"))
+                }
+            }
+            _ => Err(String::from("Response should be a Map Object")),
+        }
+    }
+}

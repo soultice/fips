@@ -4,4 +4,4 @@
   rules:
     - path: "users.>>"
       item:
-        bar: "{{Name}}"
+        foo: "{{Name}}"

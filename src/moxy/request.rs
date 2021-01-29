@@ -194,11 +194,3 @@ pub async fn moxy<'r>(
 
     Ok(returned_response)
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn mock_mode_returns() -> Result<(), String> {}
-}
