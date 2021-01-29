@@ -12,3 +12,18 @@
           - name: morty
             surname: smith
             status: learning things
+
+- path: ^/mock/final/$
+  active: true
+  headers:
+    x-app-name: moxy
+  rules:
+    - path:
+      item:
+        users:
+          - name: rick
+            surname: sanchez
+            status: doing epic stuff
+          - name: morty
+            surname: smith
+            status: learning things

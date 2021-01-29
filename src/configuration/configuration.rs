@@ -112,7 +112,7 @@ impl Configuration {
             .collect()
     }
 
-    pub fn clone_collection(&mut self, idx: usize) -> RuleCollection {
+    pub fn clone_rule(&mut self, idx: usize) -> RuleCollection {
         self.rule_collection.get_mut(idx).unwrap().clone()
     }
 }
@@ -219,5 +219,22 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn configurations_load_from_folder() -> Result<(), String> {
+        let mut configuration = Configuration::new(&PathBuf::from("./test/configuration_files/"));
+        let all_rules_loaded = configuration.rule_collection.len() == 4;
+        let first_configuration_is_selected = configuration.selected == 0;
+        if all_rules_loaded && first_configuration_is_selected {
+            Ok(())
+        } else {
+            Err(String::from("two plus two does not equal four"))
+        }
     }
 }

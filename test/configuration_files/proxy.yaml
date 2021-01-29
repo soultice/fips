@@ -1,8 +1,6 @@
 - path: ^/foo/$
   forwardUri:
     "http://localhost:8888/mock"
-  backwardHeaders:
-    - "x-app-name"
 
 - path: ^/foo/$
   forwardUri:

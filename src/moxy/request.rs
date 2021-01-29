@@ -1,19 +1,109 @@
 use crate::client::AppClient;
-use crate::configuration::Mode;
+use crate::configuration::{Mode, Rule};
 use crate::debug::{MoxyInfo, PrintInfo};
 use crate::{MainError, State};
 use bytes::Buf;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
-use hyper::{Body, Response, StatusCode};
+use hyper::http::request::Parts;
+use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
+use serde_json::Value;
+use std::collections::HashMap;
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
+struct Mox;
+
+impl Mox {
+    pub async fn forward_request(
+        uri: &Uri,
+        method: &Method,
+        headers: Option<Vec<String>>,
+        body: String,
+        parts: &Parts,
+        state: &Arc<State>,
+    ) -> Result<(hyper::http::response::Parts, Value), MainError> {
+        let mut client = AppClient {
+            uri,
+            method,
+            headers,
+            body,
+            parts,
+        };
+
+        Ok(client.response(state).await?)
+    }
+
+    pub fn set_status(
+        response_status: &Option<u16>,
+        mut returned_response: &mut Response<Body>,
+    ) -> Result<(), MainError> {
+        if let Some(response_status) = response_status {
+            *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
+        }
+        Ok(())
+    }
+
+    // Apply transformation from rules
+    pub fn transform_response(
+        rules: &Option<Vec<Rule>>,
+        mut resp_json: &mut serde_json::Value,
+    ) -> Result<(), MainError> {
+        if let Some(rules) = rules {
+            for rule in rules {
+                resp_json.dot_set(&rule.path, rule.item.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn keep_headers(
+        backwards_headers: &Option<Vec<String>>,
+        mut returned_response: &mut Response<Body>,
+    ) -> Result<(), MainError> {
+        if let Some(backward_headers) = backwards_headers {
+            let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
+            for header_name in backward_headers {
+                let header = HeaderName::from_str(&header_name)?;
+                let header_value = returned_response
+                    .headers()
+                    .get(header_name)
+                    .unwrap()
+                    .clone();
+                header_buffer.push((header, header_value));
+            }
+            returned_response.headers_mut().clear();
+            for header_tup in header_buffer {
+                returned_response
+                    .headers_mut()
+                    .insert(header_tup.0, header_tup.1);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn add_headers(
+        headers: &Option<HashMap<String, String>>,
+        mut returned_response: &mut Response<Body>,
+    ) -> Result<(), MainError> {
+        if let Some(headers) = headers {
+            for header in headers {
+                let header_name = HeaderName::from_str(header.0)?;
+                let header_value = HeaderValue::from_str(header.1)?;
+                returned_response
+                    .headers_mut()
+                    .insert(header_name, header_value);
+            }
+        }
+        Ok(())
+    }
+}
+
 pub async fn moxy<'r>(
     body: Body,
-    parts: hyper::http::request::Parts,
+    parts: Parts,
     state: &Arc<State>,
 ) -> Result<Response<Body>, MainError> {
     let method = &parts.method;
@@ -31,11 +121,7 @@ pub async fn moxy<'r>(
             (response, Mode::PROXY)
         }
         _ => {
-            let mut first_matched_rule = state
-                .configuration
-                .lock()
-                .unwrap()
-                .clone_collection(matches[0]);
+            let mut first_matched_rule = state.configuration.lock().unwrap().clone_rule(matches[0]);
 
             let mode: Mode = first_matched_rule.mode();
 
@@ -47,24 +133,19 @@ pub async fn moxy<'r>(
                     let mut buffer = String::new();
                     body_str.reader().read_to_string(&mut buffer)?;
 
-                    let mut client = AppClient {
+                    let (client_parts, mut resp_json) = Mox::forward_request(
                         uri,
                         method,
-                        headers: first_matched_rule.forward_headers.clone(),
-                        body: buffer,
-                        parts: &parts,
-                    };
-
-                    let (client_parts, mut resp_json) = client.response(state).await?;
+                        first_matched_rule.forward_headers.clone(),
+                        buffer,
+                        &parts,
+                        state,
+                    )
+                    .await?;
 
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
-                    // Apply transformation from rules
-                    if let Some(rules) = &first_matched_rule.rules {
-                        for rule in rules {
-                            resp_json.dot_set(&rule.path, rule.item.clone())?;
-                        }
-                    }
+                    Mox::transform_response(&first_matched_rule.rules, &mut resp_json);
 
                     let final_response_string = serde_json::to_string(&resp_json)?;
                     let returned_response = match final_response_string {
@@ -75,7 +156,7 @@ pub async fn moxy<'r>(
                     };
                     returned_response
                 }
-                _ => {
+                Mode::MOCK => {
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
                     let body = Body::from(serde_json::to_string(
                         &first_matched_rule.rules.as_ref().unwrap()[0].item,
@@ -85,41 +166,12 @@ pub async fn moxy<'r>(
                 }
             };
 
-            // Keep these headers from the original response
-            if let Some(backward_headers) = &first_matched_rule.backward_headers {
-                let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
-                for header_name in backward_headers {
-                    let header = HeaderName::from_str(&header_name)?;
-                    let header_value = returned_response
-                        .headers()
-                        .get(header_name)
-                        .unwrap()
-                        .clone();
-                    header_buffer.push((header, header_value));
-                }
-                returned_response.headers_mut().clear();
-                for header_tup in header_buffer {
-                    returned_response
-                        .headers_mut()
-                        .insert(header_tup.0, header_tup.1);
-                }
-            }
+            Mox::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
 
-            // Add headers to response
-            if let Some(headers) = &first_matched_rule.headers {
-                for header in headers {
-                    let header_name = HeaderName::from_str(header.0)?;
-                    let header_value = HeaderValue::from_str(header.1)?;
-                    returned_response
-                        .headers_mut()
-                        .insert(header_name, header_value);
-                }
-            }
+            Mox::add_headers(&first_matched_rule.headers, &mut returned_response)?;
 
+            Mox::set_status(&first_matched_rule.response_status, &mut returned_response);
             // Add or change response status
-            if let Some(response_status) = &first_matched_rule.response_status {
-                *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
-            }
             (returned_response, mode)
         }
     };
@@ -143,4 +195,12 @@ pub async fn moxy<'r>(
     );
 
     Ok(returned_response)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn mock_mode_returns() -> Result<(), String> {}
 }

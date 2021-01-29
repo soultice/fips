@@ -1,0 +1,7 @@
+- path: ^/final/$
+  forwardUri:
+    "http://localhost:8888/mock"
+  rules:
+    - path: "users.>>"
+      item:
+        bar: "{{Name}}"
