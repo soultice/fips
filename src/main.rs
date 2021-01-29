@@ -110,6 +110,8 @@ pub struct Opts {
     plugins: PathBuf,
     #[clap(short, long, default_value = "8888")]
     port: u16,
+    #[clap(long)]
+    headless: bool,
 }
 
 #[tokio::main]
@@ -142,67 +144,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let runtime = Runtime::new().unwrap();
-    runtime.spawn(Server::bind(&addr).serve(make_svc));
+    let handle = runtime.spawn(Server::bind(&addr).serve(make_svc));
 
-    enable_raw_mode()?;
+    if !opts.headless {
+        enable_raw_mode()?;
 
-    let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let mut stdout = stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
 
-    let (tx, rx) = mpsc::channel();
-    let tick_rate = Duration::from_millis(50);
+        let (tx, rx) = mpsc::channel();
+        let tick_rate = Duration::from_millis(50);
 
-    thread::spawn(move || {
-        let mut last_tick = Instant::now();
-        loop {
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-            if event::poll(timeout).unwrap() {
-                if let CEvent::Key(key) = event::read().unwrap() {
-                    tx.send(Event::Input(key)).unwrap();
+        thread::spawn(move || {
+            let mut last_tick = Instant::now();
+            loop {
+                let timeout = tick_rate
+                    .checked_sub(last_tick.elapsed())
+                    .unwrap_or_else(|| Duration::from_secs(0));
+                if event::poll(timeout).unwrap() {
+                    if let CEvent::Key(key) = event::read().unwrap() {
+                        tx.send(Event::Input(key)).unwrap();
+                    }
+                }
+                if last_tick.elapsed() >= tick_rate {
+                    tx.send(Event::Tick).unwrap();
+                    last_tick = Instant::now();
                 }
             }
-            if last_tick.elapsed() >= tick_rate {
-                tx.send(Event::Tick).unwrap();
-                last_tick = Instant::now();
+        });
+
+        terminal.clear()?;
+
+        panic::set_hook({
+            let captured_state = app.state.clone();
+            Box::new(move |panic_info| {
+                captured_state
+                    .add_message(PrintInfo::PLAIN(panic_info.to_string()))
+                    .unwrap_or_default();
+            })
+        });
+
+        loop {
+            terminal.draw(|f| ui::draw(f, &mut app))?;
+
+            match rx.recv()? {
+                Event::Input(event) => util::match_keybinds(event.code, &mut app)?,
+                Event::Tick => app.on_tick()?,
+            };
+
+            if app.should_quit {
+                disable_raw_mode()?;
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )?;
+                runtime.shutdown_background();
+                terminal.show_cursor()?;
+                break;
             }
         }
-    });
-
-    terminal.clear()?;
-
-    panic::set_hook({
-        let captured_state = app.state.clone();
-        Box::new(move |panic_info| {
-            captured_state
-                .add_message(PrintInfo::PLAIN(panic_info.to_string()))
-                .unwrap_or_default();
-        })
-    });
-
-    loop {
-        terminal.draw(|f| ui::draw(f, &mut app))?;
-
-        match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut app)?,
-            Event::Tick => app.on_tick()?,
-        };
-
-        if app.should_quit {
-            disable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
-            runtime.shutdown_background();
-            terminal.show_cursor()?;
-            break;
-        }
+    } else {
+        println!("server is running");
+        handle.await?.unwrap();
     }
 
     Ok(())
