@@ -122,7 +122,7 @@ where
         .map(|traffic_info| Text::from(traffic_info))
         .collect();
 
-    let mut constraints: Vec<Constraint> = text
+    let constraints: Vec<Constraint> = text
         .iter()
         .map(|t| Constraint::Max(u16::try_from(t.lines.len() + 2).unwrap()))
         .collect();

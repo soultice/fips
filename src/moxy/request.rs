@@ -2,7 +2,7 @@ use crate::client::AppClient;
 use crate::configuration::{Mode, Rule};
 use crate::debug::{MoxyInfo, PrintInfo};
 use crate::{MainError, State};
-use bytes::Buf;
+use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
 use hyper::http::request::Parts;
@@ -10,7 +10,6 @@ use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -21,7 +20,7 @@ impl Mox {
         uri: &Uri,
         method: &Method,
         headers: Option<Vec<String>>,
-        body: String,
+        body: Bytes,
         parts: &Parts,
         state: &Arc<State>,
     ) -> Result<(hyper::http::response::Parts, Value), MainError> {
@@ -38,7 +37,7 @@ impl Mox {
 
     pub fn set_status(
         response_status: &Option<u16>,
-        mut returned_response: &mut Response<Body>,
+        returned_response: &mut Response<Body>,
     ) -> Result<(), MainError> {
         if let Some(response_status) = response_status {
             *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
@@ -49,7 +48,7 @@ impl Mox {
     // Apply transformation from rules
     pub fn transform_response(
         rules: &Option<Vec<Rule>>,
-        mut resp_json: &mut serde_json::Value,
+        resp_json: &mut serde_json::Value,
     ) -> Result<(), MainError> {
         if let Some(rules) = rules {
             for rule in rules {
@@ -61,7 +60,7 @@ impl Mox {
 
     pub fn keep_headers(
         backwards_headers: &Option<Vec<String>>,
-        mut returned_response: &mut Response<Body>,
+        returned_response: &mut Response<Body>,
     ) -> Result<(), MainError> {
         if let Some(backward_headers) = backwards_headers {
             let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
@@ -86,7 +85,7 @@ impl Mox {
 
     pub fn add_headers(
         headers: &Option<HashMap<String, String>>,
-        mut returned_response: &mut Response<Body>,
+        returned_response: &mut Response<Body>,
     ) -> Result<(), MainError> {
         if let Some(headers) = headers {
             for header in headers {
@@ -129,15 +128,12 @@ pub async fn moxy<'r>(
                 Mode::PROXY | Mode::MOXY => {
                     let uri = &first_matched_rule.forward_url(&uri);
 
-                    let body_str = hyper::body::aggregate(body).await?;
-                    let mut buffer = String::new();
-                    body_str.reader().read_to_string(&mut buffer)?;
-
+                    let body = hyper::body::to_bytes(body).await?;
                     let (client_parts, mut resp_json) = Mox::forward_request(
                         uri,
                         method,
                         first_matched_rule.forward_headers.clone(),
-                        buffer,
+                        body,
                         &parts,
                         state,
                     )
@@ -145,7 +141,9 @@ pub async fn moxy<'r>(
 
                     first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
-                    Mox::transform_response(&first_matched_rule.rules, &mut resp_json);
+                    // if the response can not be transformed we do nothing
+                    Mox::transform_response(&first_matched_rule.rules, &mut resp_json)
+                        .unwrap_or_default();
 
                     let final_response_string = serde_json::to_string(&resp_json)?;
                     let returned_response = match final_response_string {
@@ -170,7 +168,7 @@ pub async fn moxy<'r>(
 
             Mox::add_headers(&first_matched_rule.headers, &mut returned_response)?;
 
-            Mox::set_status(&first_matched_rule.response_status, &mut returned_response);
+            Mox::set_status(&first_matched_rule.response_status, &mut returned_response)?;
             // Add or change response status
             (returned_response, mode)
         }

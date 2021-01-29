@@ -123,7 +123,7 @@ impl<'a> From<&Configuration> for List<'a> {
             .rule_collection
             .iter()
             .map(|c| {
-                let mut lines = vec![Spans::from(c.path.clone())];
+                let lines = vec![Spans::from(c.path.clone())];
                 let bg = match c.selected {
                     true => Color::White,
                     false => Color::Reset,

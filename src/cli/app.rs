@@ -28,10 +28,6 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn on_up(&mut self) {}
-
-    pub fn on_down(&mut self) {}
-
     pub fn on_right(&mut self) {
         self.tabs.next();
     }

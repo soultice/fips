@@ -1,8 +1,8 @@
 use crate::bytes::Buf;
 use crate::debug::{RequestInfo, ResponseInfo, TrafficInfo};
 use crate::State;
+use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
-use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ pub struct AppClient<'a> {
     pub uri: &'a Uri,
     pub method: &'a Method,
     pub headers: Option<Vec<String>>,
-    pub body: String,
+    pub body: Bytes,
     pub parts: &'a hyper::http::request::Parts,
 }
 
@@ -35,6 +35,7 @@ impl<'a> AppClient<'a> {
     ) -> Result<(Parts, serde_json::Value), ClientError> {
         let client = Client::new();
         let body = Body::from(self.body.clone());
+
         let mut client_req = hyper::Request::builder()
             .method(self.method.clone())
             .uri(self.uri)
@@ -68,13 +69,8 @@ impl<'a> AppClient<'a> {
         //hyper creates them automatically and crashes in case of a mismatch, so removing them is the easiest way
         client_parts.headers.remove("content-length");
 
-        let body = hyper::body::aggregate(client_body).await?;
-        let mut buffer = String::new();
-        body.reader().read_to_string(&mut buffer)?;
-        let mut resp_json: serde_json::Value = serde_json::Value::from("");
-        if !buffer.is_empty() {
-            resp_json = serde_json::from_str(&buffer)?;
-        }
+        let body = hyper::body::aggregate(client_body).await?.reader();
+        let resp_json: serde_json::Value = serde_json::from_reader(body).unwrap_or_default();
         Ok((client_parts, resp_json))
     }
 }
