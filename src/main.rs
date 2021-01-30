@@ -37,7 +37,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Runtime;
 use tui::{backend::CrosstermBackend, Terminal};
 
 use debug::{PrintInfo, TrafficInfo};
@@ -232,7 +232,7 @@ mod test {
     #[tokio::test]
     async fn all_functions_work() -> Result<(), String> {
         let opts = Opts {
-            config: PathBuf::from("./test/configuration_files"),
+            config: PathBuf::from("./tests/configuration_files"),
             plugins: PathBuf::from("./plugins"),
             port: 8888,
             headless: false,
@@ -247,12 +247,12 @@ mod test {
             traffic_info: Mutex::new(vec![]),
         });
 
-        let mut app = App::new(true, state, opts.clone());
+        let app = App::new(true, state, opts.clone());
 
         let addr = ([127, 0, 0, 1], opts.port).into();
         let runtime = Runtime::new().unwrap();
         let _guard = runtime.enter();
-        let rt_handle = spawn_server(&app.state, &addr);
+        let _rt_handle = spawn_server(&app.state, &addr);
 
         let client = Client::new();
 
@@ -264,7 +264,7 @@ mod test {
 
         let res = client.request(req).await.unwrap();
 
-        let (parts, body) = res.into_parts();
+        let (_parts, body) = res.into_parts();
         let body = hyper::body::aggregate(body).await.unwrap().reader();
         let body: serde_json::Value = serde_json::from_reader(body).unwrap();
 

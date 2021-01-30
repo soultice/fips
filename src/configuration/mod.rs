@@ -1,4 +1,8 @@
 mod configuration;
+mod mode;
+mod rule;
+mod rule_collection;
+
 pub use configuration::Configuration;
-pub use configuration::Mode;
-pub use configuration::Rule;
+pub use mode::Mode;
+pub use rule::Rule;
