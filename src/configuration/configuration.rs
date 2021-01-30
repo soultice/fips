@@ -4,7 +4,7 @@ use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{fs, io};
-use tui::style::{Color, Style};
+use tui::style::{Color, Modifier, Style};
 use tui::text::Spans;
 use tui::widgets::{List, ListItem};
 
@@ -110,18 +110,21 @@ impl<'a> From<&Configuration> for List<'a> {
             .map(|c| {
                 let lines = vec![Spans::from(c.path.clone())];
                 let bg = match c.selected {
-                    true => Color::White,
+                    true => Color::Reset,
                     false => Color::Reset,
                 };
-                let default = ListItem::new(lines);
-                match c.active {
-                    true => default.style(Style::default().fg(Color::Green).bg(bg)),
-                    false => default.style(Style::default().fg(Color::Red).bg(bg)),
-                }
+                let fg = match c.active {
+                    true => Color::Green,
+                    false => Color::Red,
+                };
+                let modifier = match c.selected {
+                    true => Modifier::UNDERLINED,
+                    false => Modifier::DIM,
+                };
+                ListItem::new(lines).style(Style::default().fg(fg).bg(bg).add_modifier(modifier))
             })
             .collect();
-        let list = List::new(items).style(Style::default());
-        list
+        List::new(items).style(Style::default())
     }
 }
 
