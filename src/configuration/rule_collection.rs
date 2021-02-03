@@ -13,6 +13,8 @@ fn default_as_true() -> bool {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RuleCollection {
+    #[serde(rename = "matchMethods")]
+    pub match_methods: Option<Vec<String>>,
     #[serde(skip)]
     pub selected: bool,
     #[serde(default = "default_as_true")]

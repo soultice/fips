@@ -1,0 +1,28 @@
+- path: ^/final/$
+  matchMethods:
+    - GET
+    - POST
+  forwardUri:
+    "http://localhost:8888/mock"
+  rules:
+    - path: "users.>>"
+      item:
+        bar: "{{SixMonthsPrior}}"
+
+- path: ^/sccs/v1/customers/me/markets/.*/rawconfigurations$
+  forwardUri:
+    "http://localhost:4041"
+  forwardHeaders:
+    - "authorization"
+  rules:
+    - path: "configurations.0.savedOn"
+      item: "{{SixMonthsPrior}}"
+    - path: "configurations.0.confirmedOn"
+      item: "{{SixMonthsPrior}}"
+
+- path: .*
+  forwardUri:
+    "http://localhost:8888"
+  forwardHeaders:
+    - "authorization"
+    - "content-type"

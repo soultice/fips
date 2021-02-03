@@ -1,14 +1,17 @@
 use super::rule_collection::RuleCollection;
-use hyper::Uri;
+use hyper::{Method, Uri};
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::{fs, io};
+use std::str::FromStr;
+use std::{error, fs, io};
 use tui::style::{Color, Modifier, Style};
 use tui::text::Spans;
 use tui::widgets::{List, ListItem};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct Configuration {
     pub selected: usize,
     pub rule_collection: Vec<RuleCollection>,
@@ -65,7 +68,7 @@ impl Configuration {
         Ok(())
     }
 
-    fn load_from_path(&mut self, path_to_config: &PathBuf) -> io::Result<()> {
+    fn load_from_path(&mut self, path_to_config: &PathBuf) -> Result<()> {
         let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
         let entries: Vec<_> = fs::read_dir(abs_path_to_config)?
             .filter_map(|res| match res {
@@ -75,7 +78,7 @@ impl Configuration {
             .collect();
         for path in entries.iter() {
             let f = std::fs::File::open(path).unwrap();
-            let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
+            let d: Vec<RuleCollection> = serde_yaml::from_reader(f)?;
             for rule in d {
                 self.rule_collection.push(rule)
             }
@@ -84,16 +87,36 @@ impl Configuration {
         Ok(())
     }
 
-    pub fn active_matching_rules(&mut self, uri: &Uri) -> Vec<usize> {
+    pub fn active_matching_rules(&mut self, uri: &str, method: &Method) -> Vec<usize> {
         let path_regex: Vec<String> = self
             .rule_collection
             .iter()
             .map(|rule| rule.path.to_owned())
             .collect();
         let set = RegexSet::new(&path_regex).unwrap();
-        set.matches(&*uri.to_string())
+        set.matches(uri)
             .into_iter()
-            .filter(|i| self.rule_collection[*i].active)
+            .filter(|i| {
+                self.rule_collection[*i].active
+                    && self
+                        .clone_rule(*i)
+                        .match_methods
+                        .unwrap_or(vec![
+                            "GET".to_owned(),
+                            "OPTIONS".to_owned(),
+                            "POST".to_owned(),
+                            "PUT".to_owned(),
+                            "DELETE".to_owned(),
+                            "HEAD".to_owned(),
+                            "TRACE".to_owned(),
+                            "CONNECT".to_owned(),
+                            "PATCH".to_owned(),
+                        ])
+                        .iter()
+                        .map(|s| Method::from_str(s).unwrap())
+                        .collect::<Vec<Method>>()
+                        .contains(method)
+            })
             .collect()
     }
 
@@ -125,22 +148,5 @@ impl<'a> From<&Configuration> for List<'a> {
             })
             .collect();
         List::new(items).style(Style::default())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn configurations_load_from_folder() -> Result<(), String> {
-        let configuration = Configuration::new(&PathBuf::from("./tests/configuration_files/"));
-        let all_rules_loaded = configuration.rule_collection.len() == 4;
-        let first_configuration_is_selected = configuration.selected == 0;
-        if all_rules_loaded && first_configuration_is_selected {
-            Ok(())
-        } else {
-            Err(String::from("two plus two does not equal four"))
-        }
     }
 }

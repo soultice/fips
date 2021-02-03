@@ -1,5 +1,5 @@
 use crate::client::AppClient;
-use crate::configuration::{Mode, Rule};
+use crate::configuration::{Mode, Rule, RuleCollection};
 use crate::debug::{MoxyInfo, PrintInfo};
 use crate::{MainError, State};
 use hyper::body::Bytes;
@@ -104,82 +104,65 @@ pub async fn moxy<'r>(
     body: Body,
     parts: Parts,
     state: &Arc<State>,
+    first_matched_rule: &mut RuleCollection,
 ) -> Result<Response<Body>, MainError> {
     let method = &parts.method;
     let uri = &parts.uri;
-    let matches = state
-        .configuration
-        .lock()
-        .unwrap()
-        .active_matching_rules(&uri);
 
-    let (mut returned_response, mode) = match matches.len() {
-        0 => {
-            let mut response = Response::new(Body::from("no matching rule found"));
-            *response.status_mut() = StatusCode::NOT_FOUND;
-            (response, Mode::PROXY)
-        }
-        _ => {
-            let mut first_matched_rule = state.configuration.lock().unwrap().clone_rule(matches[0]);
+    let mode: Mode = first_matched_rule.mode();
 
-            let mode: Mode = first_matched_rule.mode();
+    let mut returned_response = match mode {
+        Mode::PROXY | Mode::MOXY => {
+            let uri = &first_matched_rule.forward_url(&uri);
 
-            let mut returned_response = match mode {
-                Mode::PROXY | Mode::MOXY => {
-                    let uri = &first_matched_rule.forward_url(&uri);
+            let body = hyper::body::to_bytes(body).await?;
+            let (client_parts, mut resp_json) = Mox::forward_request(
+                uri,
+                method,
+                first_matched_rule.forward_headers.clone(),
+                body,
+                &parts,
+                state,
+            )
+            .await?;
 
-                    let body = hyper::body::to_bytes(body).await?;
-                    let (client_parts, mut resp_json) = Mox::forward_request(
-                        uri,
-                        method,
-                        first_matched_rule.forward_headers.clone(),
-                        body,
-                        &parts,
-                        state,
-                    )
-                    .await?;
+            &first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
-                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            // if the response can not be transformed we do nothing
+            Mox::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
 
-                    // if the response can not be transformed we do nothing
-                    Mox::transform_response(&first_matched_rule.rules, &mut resp_json)
-                        .unwrap_or_default();
-
-                    let final_response_string = serde_json::to_string(&resp_json)?;
-                    let returned_response = match final_response_string {
-                        s if s.is_empty() => {
-                            Response::from_parts(client_parts, Body::from(Body::default()))
-                        }
-                        s => Response::from_parts(client_parts, Body::from(s.clone())),
-                    };
-                    returned_response
+            let final_response_string = serde_json::to_string(&resp_json)?;
+            let returned_response = match final_response_string {
+                s if s.is_empty() => {
+                    Response::from_parts(client_parts, Body::from(Body::default()))
                 }
-                Mode::MOCK => {
-                    first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
-                    let body = Body::from(serde_json::to_string(
-                        &first_matched_rule.rules.as_ref().unwrap()[0].item,
-                    )?);
-                    let returned_response = Response::new(body);
-                    returned_response
-                }
+                s => Response::from_parts(client_parts, Body::from(s.clone())),
             };
-
-            Mox::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
-
-            Mox::add_headers(&first_matched_rule.headers, &mut returned_response)?;
-
-            Mox::set_status(&first_matched_rule.response_status, &mut returned_response)?;
-            // Add or change response status
-            (returned_response, mode)
+            returned_response
+        }
+        Mode::MOCK => {
+            &first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            let body = Body::from(serde_json::to_string(
+                &first_matched_rule.rules.as_ref().unwrap()[0].item,
+            )?);
+            let returned_response = Response::new(body);
+            returned_response
         }
     };
+
+    Mox::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
+
+    Mox::add_headers(&first_matched_rule.headers, &mut returned_response)?;
+
+    Mox::set_status(&first_matched_rule.response_status, &mut returned_response)?;
+    // Add or change response status
 
     state
         .add_message(PrintInfo::MOXY(MoxyInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),
-            matching_rules: matches.len(),
+            matching_rules: 1,
             response_code: returned_response.status().to_string(),
         }))
         .unwrap_or_default();
