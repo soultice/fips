@@ -1,0 +1,1 @@
+200210203: added ability to match by method types with `matchMethods`
