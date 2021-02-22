@@ -105,8 +105,12 @@ Main configuration:
 ```yaml
     # A a regex to match incoming requests. if a match is found, this rule will be applied
     path: String
+    # This name will be displayed for debugging purposes
+    name: String
     # Moxy will change the response status to this value
     responseStatus: u16,
+    # Sleep for ms
+    sleep: u64
     # Forward any incoming request to this uri and return the response
     forwardUri: String
     # Forward matching headers on the request
@@ -115,10 +119,14 @@ Main configuration:
     backwardHeaders: Vec<String>,
     # Add these headers to the response
     headers: HashMap<String, String>,
+    # Only apply a rule if the method matches these
+    matchMethods: Vec<String>
+    # Only apply a rule with this probability. It's best to have a fallback rule defined
+    matchProbability: Option<f32>
     # Transform the Response according to these rules
     rules: Vec<Rule>,
 ```
-Rules:
+Rule:
 ```yaml
    # The json_dotpath (see more at Object manipulation on the response)
    path: String,
@@ -179,7 +187,7 @@ extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
 }
 ```
 
-Above code registers the plugin on the moxy plugin registry.  The name `{{UUID}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
+Above code registers the plugin on the moxy plugin registry.  The plugins `name` `{{Name}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
 
 Example `config.yaml`
 

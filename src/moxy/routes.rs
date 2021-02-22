@@ -69,6 +69,9 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                     .add_traffic_info(TrafficInfo::OutgoingResponse(response_info))
                     .unwrap_or_default();
 
+                if let Some(sleep) = first_matched_rule.sleep {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(sleep)).await;
+                }
                 Ok(resp)
             }
         },

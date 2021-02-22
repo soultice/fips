@@ -1,5 +1,6 @@
 use super::rule_collection::RuleCollection;
 use hyper::{Method, Uri};
+use rand::Rng;
 use regex::RegexSet;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -70,12 +71,13 @@ impl Configuration {
 
     fn load_from_path(&mut self, path_to_config: &PathBuf) -> Result<()> {
         let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
-        let entries: Vec<_> = fs::read_dir(abs_path_to_config)?
+        let mut entries: Vec<_> = fs::read_dir(abs_path_to_config)?
             .filter_map(|res| match res {
                 Ok(e) if e.path().extension()? == "yaml" => Some(e.path()),
                 _ => None,
             })
             .collect();
+        entries.sort();
         for path in entries.iter() {
             let f = std::fs::File::open(path).unwrap();
             let d: Vec<RuleCollection> = serde_yaml::from_reader(f)?;
@@ -88,6 +90,7 @@ impl Configuration {
     }
 
     pub fn active_matching_rules(&mut self, uri: &str, method: &Method) -> Vec<usize> {
+        let mut rng = rand::thread_rng();
         let path_regex: Vec<String> = self
             .rule_collection
             .iter()
@@ -98,6 +101,7 @@ impl Configuration {
             .into_iter()
             .filter(|i| {
                 self.rule_collection[*i].active
+                    && rng.gen_range(0.0, 1.0) < self.clone_rule(*i).match_with_prob.unwrap_or(1.0)
                     && self
                         .clone_rule(*i)
                         .match_methods
@@ -131,7 +135,15 @@ impl<'a> From<&Configuration> for List<'a> {
             .rule_collection
             .iter()
             .map(|c| {
-                let lines = vec![Spans::from(c.path.clone())];
+                let mut lines: Vec<Spans> = vec![];
+                if let Some(rule_name) = c.name.clone() {
+                    lines.extend(vec![Spans::from(format!(
+                        "name: {} --- path: {}",
+                        rule_name, c.path
+                    ))]);
+                } else {
+                    lines.extend(vec![Spans::from(format!("path: {}", c.path.clone()))]);
+                }
                 let bg = match c.selected {
                     true => Color::Reset,
                     false => Color::Reset,

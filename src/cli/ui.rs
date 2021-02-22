@@ -96,7 +96,7 @@ where
     B: Backend,
 {
     let block = Block::default().borders(Borders::ALL).title(Span::styled(
-        "Select Rules",
+        "Toggle Rules",
         Style::default()
             .fg(Color::Magenta)
             .add_modifier(Modifier::BOLD),

@@ -13,10 +13,14 @@ fn default_as_true() -> bool {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RuleCollection {
+    pub name: Option<String>,
+    #[serde(rename = "matchProbability")]
+    pub match_with_prob: Option<f32>,
     #[serde(rename = "matchMethods")]
     pub match_methods: Option<Vec<String>>,
     #[serde(skip)]
     pub selected: bool,
+    pub sleep: Option<u64>,
     #[serde(default = "default_as_true")]
     pub active: bool,
     pub path: String,

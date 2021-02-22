@@ -157,12 +157,14 @@ pub async fn moxy<'r>(
     Mox::set_status(&first_matched_rule.response_status, &mut returned_response)?;
     // Add or change response status
 
+    let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
     state
         .add_message(PrintInfo::MOXY(MoxyInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),
             matching_rules: 1,
+            name,
             response_code: returned_response.status().to_string(),
         }))
         .unwrap_or_default();
