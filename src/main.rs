@@ -15,7 +15,7 @@ mod plugin;
 mod util;
 
 use bytes;
-use clap::Clap;
+use clap::{AppSettings, Parser};
 use cli::{ui, App};
 use client::ClientError;
 use configuration::Configuration;
@@ -101,7 +101,7 @@ impl<S: ToString> From<S> for MainError {
     }
 }
 
-#[derive(Clap, Clone)]
+#[derive(Parser, Clone)]
 #[clap(version = VERSION, author = "Florian Pfingstag")]
 pub struct Opts {
     /// The directory from where to load config files
