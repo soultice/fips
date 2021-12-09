@@ -1,6 +1,6 @@
 use crate::client::AppClient;
 use crate::configuration::{Mode, Rule, RuleCollection};
-use crate::debug::{MoxyInfo, PrintInfo};
+use crate::debug::{PimpsInfo, PrintInfo};
 use crate::{MainError, State};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
@@ -100,7 +100,7 @@ impl Mox {
     }
 }
 
-pub async fn moxy<'r>(
+pub async fn pimps<'r>(
     body: Body,
     parts: Parts,
     state: &Arc<State>,
@@ -112,7 +112,7 @@ pub async fn moxy<'r>(
     let mode: Mode = first_matched_rule.mode();
 
     let mut returned_response = match mode {
-        Mode::PROXY | Mode::MOXY => {
+        Mode::PROXY | Mode::PIMPS => {
             let uri = &first_matched_rule.forward_url(&uri);
 
             let body = hyper::body::to_bytes(body).await?;
@@ -159,7 +159,7 @@ pub async fn moxy<'r>(
 
     let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
     state
-        .add_message(PrintInfo::MOXY(MoxyInfo {
+        .add_message(PrintInfo::PIMPS(PimpsInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),

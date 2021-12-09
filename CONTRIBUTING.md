@@ -14,12 +14,12 @@ By contributing you will agree that your contribution will be put under the same
 For communication please respect our [FOSS Code of Conduct](https://github.com/Daimler/daimler-foss/blob/master/CODE_OF_CONDUCT.md).
 
 The following communication channels exist for this project:
-- Github for reporting and claiming issues: https://github.com/daimler/moxy/issues
+- Github for reporting and claiming issues: https://github.com/daimler/pimps/issues
 
 Transparent and open communication is important to us. Thus, all project-related communication should happen only through these channels and in English. Issue-related communication should happen within the concerned issue.
 
 ## Quick Start
-Please look at the [issue tracker](https://github.com/daimler/moxy/issues)
+Please look at the [issue tracker](https://github.com/daimler/pimps/issues)
 
 ## Contributions
 If you would like to contribute code you can do so through Daimler GitHub by forking the repository and sending a pull request.

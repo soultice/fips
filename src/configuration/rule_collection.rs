@@ -47,7 +47,7 @@ impl RuleCollection {
 
     pub fn mode(&self) -> Mode {
         let mode: Mode = match (&self.forward_uri, &self.rules) {
-            (Some(_), Some(_)) => Mode::MOXY,
+            (Some(_), Some(_)) => Mode::PIMPS,
             (None, Some(_)) => Mode::MOCK,
             _ => Mode::PROXY,
         };

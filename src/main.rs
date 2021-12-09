@@ -10,7 +10,7 @@ mod cli;
 mod client;
 mod configuration;
 mod debug;
-mod moxy;
+mod pimps;
 mod plugin;
 mod util;
 
@@ -123,7 +123,7 @@ fn spawn_server(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Resu
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
                 let route_capture = Arc::clone(&inner_capture);
-                async move { moxy::routes(req, route_capture).await }
+                async move { pimps::routes(req, route_capture).await }
             }))
         }
     });

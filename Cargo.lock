@@ -484,30 +484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moxy"
-version = "0.0.1"
-dependencies = [
- "bytes 1.0.0",
- "clap",
- "crossterm",
- "futures",
- "hyper",
- "json-patch",
- "json_dotpath",
- "libloading",
- "rand",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "strum",
- "strum_macros",
- "tokio",
- "tui",
- "unicode-width",
-]
-
-[[package]]
 name = "ntapi"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -564,6 +540,30 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "winapi",
+]
+
+[[package]]
+name = "pimps"
+version = "0.0.1"
+dependencies = [
+ "bytes 1.0.0",
+ "clap",
+ "crossterm",
+ "futures",
+ "hyper",
+ "json-patch",
+ "json_dotpath",
+ "libloading",
+ "rand",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "strum",
+ "strum_macros",
+ "tokio",
+ "tui",
+ "unicode-width",
 ]
 
 [[package]]

@@ -1,10 +1,10 @@
-# Moxy - mock and proxy within seconds
+# Pluggable Injecting Mock and Proxy Server - in short P.I.M.P.S - mock and proxy within seconds
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## About
 
-Moxy provides three different functionalities: It can function as a Mock server, it can function as a simple proxy server, and it can be a mixture of both, manipulating responses on the fly - defined by your own rules. As such, moxy is best used if you wish to quickly setup an endpoint and test it in your application - the backend work is currently blocked? No problem. Start the moxy application and host a mock endpoint while proxying the remainders of your endpoints to the actual backend.
+P.I.M.P.S provides three different functionalities: It can function as a Mock server, it can function as a simple proxy server, and it can be a mixture of both, manipulating responses on the fly - defined by your own rules. As such, P.I.M.P.S is best used if you wish to quickly setup an endpoint and test it in your application - the backend work is currently blocked? No problem. Start the application and host a mock endpoint while proxying the remainders of your endpoints to the actual backend.
 
 ## Installation
 
@@ -15,9 +15,9 @@ Binaries for Linux and Windows are attached to each release on the release page.
 - Dir into it and run `cargo run` - or `cargo build` if you wish to produce an executable.
 
 ## Cli Arguments
-Also see `moxy(.exe) --help`
+Also see `pimps(.exe) --help`
 ```yaml
-  # Start moxy on this Port
+  # Start pimps on this port
   --port: 8888
   # Load plugins from this directory, detault is the current directory.
   --plugins: .
@@ -33,21 +33,21 @@ Also see `moxy(.exe) --help`
 
 ## Usage
 
-Moxys configuration is placed in `.yaml` files they are loaded at startup from the `--config` directory.
-For each request, moxy will check against the `.yaml` files if any config object matches the current request URI.
+P.I.M.P.Ss configuration is placed in `.yaml` files they are loaded at startup from the `--config` directory.
+For each request, P.I.M.P.S will check against the `.yaml` files if any config object matches the current request URI.
 If it does, one of the three modes do apply implicitly by the configuration given.
 
 | Mode  | forwardUri | rules |
 | ----- | :--------: | ----- |
-| moxy  |     ✔️     | ✔️    |
+| P.I.M.P.S  |     ✔️     | ✔️    |
 | proxy |     ✔️     | ❌    |
 | mock  |     ❌     | ✔️    |
 
-Meaning if you've set `forwardUri` but havent set any `rules`, then moxy will function as a proxy server.
+Meaning if you've set `forwardUri` but havent set any `rules`, then P.I.M.P.S will function as a proxy server.
 
 ❗ **Things to keep in mind for your config:**
 
-- Moxy uses regex to match against paths. `/foo/bar` in a config path will also match for `/foo/bar/baz`, so you need to be as explicit as possible if you care.
+- P.I.M.P.S uses regex to match against paths. `/foo/bar` in a config path will also match for `/foo/bar/baz`, so you need to be as explicit as possible if you care.
 - If multiple rules match, only the first rule will apply.
 - Rules are applied in the order they appear - so order matters.
 - The config file is not checked for spelling.
@@ -64,7 +64,7 @@ Meaning if you've set `forwardUri` but havent set any `rules`, then moxy will fu
 
 See also the `examples` directory for more example configurations.
 
-1. Any request arriving at moxy with the URI `/foo/bar` will return `['this is a lot of fun']`
+1. Any request arriving at P.I.M.P.S with the URI `/foo/bar` will return `['this is a lot of fun']`
 
 ```yaml
 - path: ^/foo/bar/$
@@ -107,7 +107,7 @@ Main configuration:
     path: String
     # This name will be displayed for debugging purposes
     name: String
-    # Moxy will change the response status to this value
+    # P.I.M.P.S will change the response status to this value
     responseStatus: u16,
     # Sleep for ms
     sleep: u64
@@ -159,15 +159,15 @@ Rule:
 
 ## Extension
 
-One of moxys key features is its extension system. Moxy exports a rust macro `export_plugin`.
+One of P.I.M.P.Ss key features is its extension system. P.I.M.P.S exports a rust macro `export_plugin`.
 Your extension can make use of this macro to register a plugin.
 The plugins name will be matched against your configuration. If a match occurs, the pattern will be replaced
-with the output of your plugin. All plugins matching your OS in the `plugins` directory relative to the moxy binary will be loaded automatically at startup.
+with the output of your plugin. All plugins matching your OS in the `plugins` directory relative to the P.I.M.P.S binary will be loaded automatically at startup.
 
 Example plugin implementation:
 
 ```rust
-use moxy::{PluginRegistrar, Function, InvocationError};
+use pimps::{PluginRegistrar, Function, InvocationError};
 use fake::{faker::name::raw::NameWithTitle, locales::EN, Fake};
 
 pub struct Random;
@@ -180,14 +180,14 @@ impl Function for Random {
     }
 }
 
-moxy::export_plugin!(register);
+pimps::export_plugin!(register);
 
 extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
     registrar.register_function("{{Name}}", Box::new(Random));
 }
 ```
 
-Above code registers the plugin on the moxy plugin registry.  The plugins `name` `{{Name}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
+Above code registers the plugin on the P.I.M.P.S plugin registry.  The plugins `name` `{{Name}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
 
 Example `config.yaml`
 

@@ -1,6 +1,6 @@
-use super::moxy_info::MoxyInfo;
+use super::pimps_info::PimpsInfo;
 
 pub enum PrintInfo {
     PLAIN(String),
-    MOXY(MoxyInfo),
+    PIMPS(PimpsInfo),
 }

@@ -1,5 +1,5 @@
-use super::request::moxy;
-use crate::debug::{MoxyInfo, PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
+use super::request::pimps;
+use crate::debug::{PimpsInfo, PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
 use crate::State;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
@@ -59,7 +59,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
 
                 let (parts, body) = req.into_parts();
 
-                let resp: Response<Body> = moxy(body, parts, &state, &mut first_matched_rule)
+                let resp: Response<Body> = pimps(body, parts, &state, &mut first_matched_rule)
                     .await
                     .unwrap();
 

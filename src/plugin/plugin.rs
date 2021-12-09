@@ -1,5 +1,5 @@
 use libloading::Library;
-use moxy::{Function, InvocationError, PluginDeclaration};
+use pimps::{Function, InvocationError, PluginDeclaration};
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -126,7 +126,7 @@ impl PluginRegistrar {
     }
 }
 
-impl moxy::PluginRegistrar for PluginRegistrar {
+impl pimps::PluginRegistrar for PluginRegistrar {
     fn register_function(&mut self, name: &str, function: Box<dyn Function + Send>) {
         let proxy = FunctionProxy {
             function,
