@@ -89,7 +89,7 @@ impl Configuration {
         Ok(())
     }
 
-    pub fn active_matching_rules(&mut self, uri: &str, method: &Method) -> Vec<usize> {
+    pub fn active_matching_rules(&mut self, uri: &str, method: &Method, body: &str) -> Vec<usize> {
         let mut rng = rand::thread_rng();
         let path_regex: Vec<String> = self
             .rule_collection
@@ -102,6 +102,8 @@ impl Configuration {
             .filter(|i| {
                 self.rule_collection[*i].active
                     && rng.gen_range(0.0, 1.0) < self.clone_rule(*i).match_with_prob.unwrap_or(1.0)
+                    && (self.rule_collection[*i].match_body_contains.is_none()
+                        || body.contains(&self.clone_rule(*i).match_body_contains.unwrap()))
                     && self
                         .clone_rule(*i)
                         .match_methods

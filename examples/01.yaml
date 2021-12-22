@@ -1,7 +1,7 @@
 - path: ^/mock/foo/$
   name: "this rule has a name"
   #matchProbability: 0.5
-  sleep: 15000
+  #sleep: 15000
   active: true
   headers:
     x-app-name: P.I.M.P.S

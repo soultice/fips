@@ -102,7 +102,7 @@ impl Mox {
 }
 
 pub async fn pimps<'r>(
-    body: Body,
+    body: Bytes,
     parts: Parts,
     state: &Arc<State>,
     first_matched_rule: &mut RuleCollection,
@@ -116,7 +116,6 @@ pub async fn pimps<'r>(
         Mode::PROXY | Mode::PIMPS => {
             let uri = &first_matched_rule.forward_url(&uri);
 
-            let body = hyper::body::to_bytes(body).await?;
             let (client_parts, mut resp_json) = Mox::forward_request(
                 uri,
                 method,

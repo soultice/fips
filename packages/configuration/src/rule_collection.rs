@@ -16,6 +16,8 @@ pub struct RuleCollection {
     pub name: Option<String>,
     #[serde(rename = "matchProbability")]
     pub match_with_prob: Option<f32>,
+    #[serde(rename = "matchBodyContains")]
+    pub match_body_contains: Option<String>,
     #[serde(rename = "matchMethods")]
     pub match_methods: Option<Vec<String>>,
     #[serde(skip)]
