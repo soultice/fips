@@ -1,5 +1,6 @@
 use crate::util::TabsState;
-use crate::{Opts, State};
+use crate::cli::options::{Opts};
+use crate::cli::state::State;
 use std::sync::Arc;
 
 pub struct App<'a> {

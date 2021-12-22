@@ -4,25 +4,26 @@ version = "0.0.1"
 authors = ["Florian Pfingstag <florian.pfingstag@daimler.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+	"packages/terminal_ui",
+	"packages/configuration",
+	"packages/plugin_registry",
+]
 
 [dependencies]
+terminal_ui = { path = "./packages/terminal_ui" }
+plugin_registry = { path = "./packages/plugin_registry" }
+configuration = { path = "./packages/configuration" }
+tui = { version = "0.13", default-features = false, features = ['crossterm'] }
+tokio= { version="1.0", features=["full"] }
+hyper = { version = "0.14", features = ["full"] }
+clap = { version = "3.0.0-rc.7", features = ["derive"] }
 bytes = "1.0.0"
 serde_yaml = "0.8.14"
 serde = "1.0.118"
 serde_json = "1.0.60"
 json-patch = "*"
-regex = "1.4.2"
 crossterm = "0.18"
-tui = { version = "0.13", default-features = false, features = ['crossterm'] }
-rand = "0.7"
-unicode-width = "0.1"
 futures="0.3"
-tokio= { version="1.0", features=["full"] }
-hyper = { version = "0.14", features = ["full"] }
 json_dotpath = "1.0.3"
-strum = "0.20"
-strum_macros = "0.20"
-libloading = "0.6.6"
-clap = "=3.0.0-beta.5"
-

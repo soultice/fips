@@ -1,5 +1,6 @@
 use crate::cli::App;
-use crate::{PrintInfo, State, TrafficInfo};
+use crate::debug::{PrintInfo, TrafficInfo};
+use crate::cli::state::{State};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tui::{

@@ -1,0 +1,15 @@
+[package]
+name = "terminal_ui"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+configuration = { path = "../configuration" }
+plugin_registry = { path = "../plugin_registry" }
+crossterm = "0.18"
+tui = { version = "0.13", default-features = false, features = ['crossterm'] }
+hyper = { version = "0.14", features = ["full"] }
+clap = { version = "3.0.0-rc.7", features = ["derive"] }
+

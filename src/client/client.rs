@@ -1,10 +1,11 @@
 use crate::bytes::Buf;
-use crate::debug::{RequestInfo, ResponseInfo, TrafficInfo};
-use crate::State;
+use terminal_ui::debug::{RequestInfo, ResponseInfo, TrafficInfo};
+use terminal_ui::state::State;
 use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::error::Error;
 
 #[derive(Debug)]
 pub struct AppClient<'a> {
@@ -15,24 +16,11 @@ pub struct AppClient<'a> {
     pub parts: &'a hyper::http::request::Parts,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ClientError {
-    Other { msg: String },
-}
-
-impl<S: ToString> From<S> for ClientError {
-    fn from(other: S) -> ClientError {
-        ClientError::Other {
-            msg: other.to_string(),
-        }
-    }
-}
-
 impl<'a> AppClient<'a> {
     pub async fn response(
         &mut self,
         state: &Arc<State>,
-    ) -> Result<(Parts, serde_json::Value), ClientError> {
+    ) -> Result<(Parts, serde_json::Value), Box<dyn Error>> {
         let client = Client::new();
         let body = Body::from(self.body.clone());
 

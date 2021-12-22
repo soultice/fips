@@ -1,0 +1,17 @@
+[package]
+name = "configuration"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+plugin_registry = { path = "../plugin_registry" }
+serde_yaml = "0.8.14"
+serde = "1.0.118"
+serde_json = "1.0.60"
+regex = "1.4.2"
+tui = { version = "0.13", default-features = false, features = ['crossterm'] }
+rand = "0.7"
+hyper = { version = "0.14", features = ["full"] }
+strum_macros = "0.20"

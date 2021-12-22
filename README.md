@@ -123,6 +123,8 @@ Main configuration:
     matchMethods: Vec<String>
     # Only apply a rule with this probability. It's best to have a fallback rule defined
     matchProbability: Option<f32>
+    # Only apply a rule if the request body contains the given string
+    matchBodyContains: Option<String>
     # Transform the Response according to these rules
     rules: Vec<Rule>,
 ```
