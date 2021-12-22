@@ -119,24 +119,15 @@ dependencies = [
 name = "configuration"
 version = "0.1.0"
 dependencies = [
- "bytes 1.0.0",
- "crossterm",
- "futures",
  "hyper",
- "json-patch",
- "json_dotpath",
- "libloading",
  "plugin_registry",
  "rand",
  "regex",
  "serde",
  "serde_json",
  "serde_yaml",
- "strum",
  "strum_macros",
- "tokio",
  "tui",
- "unicode-width",
 ]
 
 [[package]]
@@ -577,19 +568,13 @@ dependencies = [
  "hyper",
  "json-patch",
  "json_dotpath",
- "libloading",
  "plugin_registry",
- "rand",
- "regex",
  "serde",
  "serde_json",
  "serde_yaml",
- "strum",
- "strum_macros",
  "terminal_ui",
  "tokio",
  "tui",
- "unicode-width",
 ]
 
 [[package]]
@@ -648,23 +633,8 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 name = "plugin_registry"
 version = "0.1.0"
 dependencies = [
- "bytes 1.0.0",
- "crossterm",
- "futures",
- "hyper",
- "json-patch",
  "json_dotpath",
  "libloading",
- "rand",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "strum",
- "strum_macros",
- "tokio",
- "tui",
- "unicode-width",
 ]
 
 [[package]]
@@ -897,12 +867,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
-name = "strum"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
-
-[[package]]
 name = "strum_macros"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -938,26 +902,12 @@ dependencies = [
 name = "terminal_ui"
 version = "0.1.0"
 dependencies = [
- "bytes 1.0.0",
  "clap",
  "configuration",
  "crossterm",
- "futures",
  "hyper",
- "json-patch",
- "json_dotpath",
- "libloading",
  "plugin_registry",
- "rand",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml",
- "strum",
- "strum_macros",
- "tokio",
  "tui",
- "unicode-width",
 ]
 
 [[package]]
