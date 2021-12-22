@@ -1,6 +1,6 @@
 use super::mode::Mode;
 use super::rule::Rule;
-use crate::plugin::ExternalFunctions;
+use plugin_registry::plugin::ExternalFunctions;
 use hyper::Uri;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

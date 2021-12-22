@@ -1,7 +1,7 @@
 use crate::client::AppClient;
 use crate::configuration::{Mode, Rule, RuleCollection};
-use crate::debug::{PimpsInfo, PrintInfo};
-use crate::{MainError, State};
+use terminal_ui::state::{State};
+use terminal_ui::debug::{PimpsInfo, PrintInfo};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
@@ -12,6 +12,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::error::Error;
 
 struct Mox;
 
@@ -23,7 +24,7 @@ impl Mox {
         body: Bytes,
         parts: &Parts,
         state: &Arc<State>,
-    ) -> Result<(hyper::http::response::Parts, Value), MainError> {
+    ) -> Result<(hyper::http::response::Parts, Value), Box<dyn Error>> {
         let mut client = AppClient {
             uri,
             method,
@@ -38,7 +39,7 @@ impl Mox {
     pub fn set_status(
         response_status: &Option<u16>,
         returned_response: &mut Response<Body>,
-    ) -> Result<(), MainError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(response_status) = response_status {
             *returned_response.status_mut() = StatusCode::from_u16(*response_status)?
         }
@@ -49,7 +50,7 @@ impl Mox {
     pub fn transform_response(
         rules: &Option<Vec<Rule>>,
         resp_json: &mut serde_json::Value,
-    ) -> Result<(), MainError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(rules) = rules {
             for rule in rules {
                 resp_json.dot_set(&rule.path, rule.item.clone())?;
@@ -61,7 +62,7 @@ impl Mox {
     pub fn keep_headers(
         backwards_headers: &Option<Vec<String>>,
         returned_response: &mut Response<Body>,
-    ) -> Result<(), MainError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(backward_headers) = backwards_headers {
             let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
             for header_name in backward_headers {
@@ -86,7 +87,7 @@ impl Mox {
     pub fn add_headers(
         headers: &Option<HashMap<String, String>>,
         returned_response: &mut Response<Body>,
-    ) -> Result<(), MainError> {
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(headers) = headers {
             for header in headers {
                 let header_name = HeaderName::from_str(header.0)?;
@@ -105,7 +106,7 @@ pub async fn pimps<'r>(
     parts: Parts,
     state: &Arc<State>,
     first_matched_rule: &mut RuleCollection,
-) -> Result<Response<Body>, MainError> {
+) -> Result<Response<Body>, Box<dyn Error>> {
     let method = &parts.method;
     let uri = &parts.uri;
 
@@ -126,7 +127,7 @@ pub async fn pimps<'r>(
             )
             .await?;
 
-            &first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
             Mox::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
@@ -141,7 +142,7 @@ pub async fn pimps<'r>(
             returned_response
         }
         Mode::MOCK => {
-            &first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
             let body = Body::from(serde_json::to_string(
                 &first_matched_rule.rules.as_ref().unwrap()[0].item,
             )?);

@@ -1,5 +1,5 @@
 use libloading::Library;
-use pimps::{Function, InvocationError, PluginDeclaration};
+use super::{Function, InvocationError, PluginDeclaration};
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -78,11 +78,11 @@ impl ExternalFunctions {
         let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
             .filter_map(|res| match env::consts::OS {
                 "windows" => match res {
-                    Ok(e) if e.path().extension()? == "dll" => Some(e.path()),
+                    Ok(e) if e.path().extension()? == "dll" || e.path().extension()? == "module" => Some(e.path()),
                     _ => None,
                 },
                 _ => match res {
-                    Ok(e) if e.path().extension()? == "so" => Some(e.path()),
+                    Ok(e) if e.path().extension()? == "so" || e.path().extension()? == "module" => Some(e.path()),
                     _ => None,
                 },
             })
@@ -126,7 +126,7 @@ impl PluginRegistrar {
     }
 }
 
-impl pimps::PluginRegistrar for PluginRegistrar {
+impl super::PluginRegistrar for PluginRegistrar {
     fn register_function(&mut self, name: &str, function: Box<dyn Function + Send>) {
         let proxy = FunctionProxy {
             function,

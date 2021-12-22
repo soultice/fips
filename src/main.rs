@@ -3,21 +3,15 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-#[macro_use]
-extern crate strum_macros;
-
-mod cli;
+use terminal_ui;
+use configuration;
+use plugin_registry;
 mod client;
-mod configuration;
-mod debug;
 mod pimps;
-mod plugin;
-mod util;
+
+use terminal_ui::cli::{ui, App};
 
 use bytes;
-use clap::{AppSettings, Parser};
-use cli::{ui, App};
-use client::ClientError;
 use configuration::Configuration;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
@@ -28,11 +22,10 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Server,
 };
-use plugin::ExternalFunctions;
+use plugin_registry::ExternalFunctions;
 use std::{
     io::{stdout, Write},
     panic,
-    path::PathBuf,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -40,83 +33,21 @@ use std::{
 use tokio::runtime::Runtime;
 use tui::{backend::CrosstermBackend, Terminal};
 
-use debug::{PrintInfo, TrafficInfo};
+use terminal_ui::debug::{PrintInfo};
+use terminal_ui::util;
+use terminal_ui::cli::options::Opts;
+use terminal_ui::cli::state::State;
 use std::net::SocketAddr;
 use tokio::task::JoinHandle;
+use clap::Parser;
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-pub struct State {
-    messages: Mutex<Vec<PrintInfo>>,
-    plugins: Mutex<ExternalFunctions>,
-    configuration: Mutex<Configuration>,
-    traffic_info: Mutex<Vec<TrafficInfo>>,
-}
-
-impl State {
-    pub fn add_traffic_info(&self, traffic_info: TrafficInfo) -> Result<(), MainError> {
-        if let Ok(mut traffic) = self.traffic_info.lock() {
-            traffic.insert(0, traffic_info);
-            if traffic.len() > 20 {
-                traffic.pop();
-            }
-        }
-        Ok(())
-    }
-
-    pub fn add_message(&self, message: PrintInfo) -> Result<(), MainError> {
-        if let Ok(mut messages) = self.messages.lock() {
-            messages.insert(0, message);
-            if messages.len() > 200 {
-                messages.pop();
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum MainError {
-    Other { msg: String },
-}
-
-impl From<ClientError> for MainError {
-    fn from(client_error: ClientError) -> MainError {
-        match client_error {
-            ClientError::Other { msg } => MainError::Other { msg },
-        }
-    }
-}
-
-impl<S: ToString> From<S> for MainError {
-    fn from(other: S) -> MainError {
-        MainError::Other {
-            msg: other.to_string(),
-        }
-    }
-}
-
-#[derive(Parser, Clone)]
-#[clap(version = VERSION, author = "Florian Pfingstag")]
-pub struct Opts {
-    /// The directory from where to load config files
-    #[clap(short, long, default_value = ".")]
-    config: PathBuf,
-    /// The directory from where to load plugins
-    #[clap(long, default_value = ".")]
-    plugins: PathBuf,
-    #[clap(short, long, default_value = "8888")]
-    port: u16,
-    #[clap(long)]
-    headless: bool,
-}
-
-fn spawn_server(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Result<()>> {
+fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Result<()>> {
     let capture_state = Arc::clone(state);
     let make_svc = make_service_fn(move |_| {
         let inner_capture = Arc::clone(&capture_state);
@@ -151,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = ([127, 0, 0, 1], opts.port).into();
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
-    let rt_handle = spawn_server(&app.state, &addr);
+    let rt_handle = spawn_backend(&app.state, &addr);
 
     if !opts.headless {
         enable_raw_mode()?;
@@ -252,7 +183,7 @@ mod test {
         let addr = ([127, 0, 0, 1], opts.port).into();
         let runtime = Runtime::new().unwrap();
         let _guard = runtime.enter();
-        let _rt_handle = spawn_server(&app.state, &addr);
+        let _rt_handle = spawn_backend(&app.state, &addr);
 
         let client = Client::new();
 

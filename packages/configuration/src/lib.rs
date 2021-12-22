@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate strum_macros;
+
 mod configuration;
 mod mode;
 mod rule;

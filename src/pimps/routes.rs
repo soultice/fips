@@ -1,6 +1,6 @@
 use super::request::pimps;
-use crate::debug::{PimpsInfo, PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
-use crate::State;
+use terminal_ui::debug::{PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
+use terminal_ui::state::State;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;

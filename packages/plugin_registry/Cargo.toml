@@ -1,20 +1,11 @@
 [package]
-name = "pimps"
-version = "0.0.1"
-authors = ["Florian Pfingstag <florian.pfingstag@daimler.com>"]
-edition = "2018"
+name = "plugin_registry"
+version = "0.1.0"
+edition = "2021"
 
-[workspace]
-members = [
-	"packages/terminal_ui",
-	"packages/configuration",
-	"packages/plugin_registry",
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-terminal_ui = { path = "./packages/terminal_ui" }
-plugin_registry = { path = "./packages/plugin_registry" }
-configuration = { path = "./packages/configuration" }
 bytes = "1.0.0"
 serde_yaml = "0.8.14"
 serde = "1.0.118"
@@ -32,6 +23,3 @@ json_dotpath = "1.0.3"
 strum = "0.20"
 strum_macros = "0.20"
 libloading = "0.6.6"
-clap = { version = "3.0.0-rc.7", features = ["derive"] }
-
-

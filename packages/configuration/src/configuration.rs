@@ -1,8 +1,8 @@
 use super::rule_collection::RuleCollection;
-use hyper::{Method, Uri};
+use hyper::{Method};
 use rand::Rng;
 use regex::RegexSet;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{error, fs, io};
