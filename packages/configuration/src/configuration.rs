@@ -71,9 +71,18 @@ impl Configuration {
 
     fn load_from_path(&mut self, path_to_config: &PathBuf) -> Result<()> {
         let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
+        let allowed_file_extensions = vec!["yaml", "yml"];
+        let regex_matcher = RegexSet::new(allowed_file_extensions)?;
         let mut entries: Vec<_> = fs::read_dir(abs_path_to_config)?
-            .filter_map(|res| match res {
-                Ok(e) if e.path().extension()? == "yaml" => Some(e.path()),
+            .filter_map(|file| match file {
+                Ok(file) => {
+                    let path = file.path();
+                    let extension = path.extension()?.to_str();
+                    match extension {
+                        Some(ext) if regex_matcher.is_match(ext) => Some(path),
+                        _ => None
+                    }
+                }
                 _ => None,
             })
             .collect();
