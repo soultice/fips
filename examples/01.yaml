@@ -15,6 +15,7 @@
           - name: morty
             surname: smith
             status: learning things
+            date: "{{SixMonthsPrior}}"
 
 - path: ^/mock/final/$
   active: true

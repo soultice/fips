@@ -1,8 +1,8 @@
 use super::rule_collection::RuleCollection;
-use hyper::{Method};
+use hyper::Method;
 use rand::Rng;
 use regex::RegexSet;
-use serde::{Deserialize};
+use serde::Deserialize;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{error, fs, io};
@@ -60,7 +60,7 @@ impl Configuration {
     pub fn reload(&mut self) -> io::Result<()> {
         self.rule_collection = Vec::new();
         for path in self.loaded_paths.iter() {
-            let f = std::fs::File::open(path).unwrap();
+            let f = std::fs::File::open(path)?;
             let d: Vec<RuleCollection> = serde_yaml::from_reader(f).ok().unwrap();
             for rule in d {
                 self.rule_collection.push(rule)
@@ -71,9 +71,18 @@ impl Configuration {
 
     fn load_from_path(&mut self, path_to_config: &PathBuf) -> Result<()> {
         let abs_path_to_config = std::fs::canonicalize(&path_to_config).unwrap();
+        let allowed_file_extensions = vec!["yaml", "yml"];
+        let regex_matcher = RegexSet::new(allowed_file_extensions)?;
         let mut entries: Vec<_> = fs::read_dir(abs_path_to_config)?
-            .filter_map(|res| match res {
-                Ok(e) if e.path().extension()? == "yaml" => Some(e.path()),
+            .filter_map(|file| match file {
+                Ok(file) => {
+                    let path = file.path();
+                    let extension = path.extension()?.to_str();
+                    match extension {
+                        Some(ext) if regex_matcher.is_match(ext) => Some(path),
+                        _ => None
+                    }
+                }
                 _ => None,
             })
             .collect();
@@ -97,33 +106,43 @@ impl Configuration {
             .map(|rule| rule.path.to_owned())
             .collect();
         let set = RegexSet::new(&path_regex).unwrap();
-        set.matches(uri)
-            .into_iter()
-            .filter(|i| {
-                self.rule_collection[*i].active
-                    && rng.gen_range(0.0, 1.0) < self.clone_rule(*i).match_with_prob.unwrap_or(1.0)
-                    && (self.rule_collection[*i].match_body_contains.is_none()
-                        || body.contains(&self.clone_rule(*i).match_body_contains.unwrap()))
-                    && self
-                        .clone_rule(*i)
-                        .match_methods
-                        .unwrap_or(vec![
-                            "GET".to_owned(),
-                            "OPTIONS".to_owned(),
-                            "POST".to_owned(),
-                            "PUT".to_owned(),
-                            "DELETE".to_owned(),
-                            "HEAD".to_owned(),
-                            "TRACE".to_owned(),
-                            "CONNECT".to_owned(),
-                            "PATCH".to_owned(),
-                        ])
-                        .iter()
-                        .map(|s| Method::from_str(s).unwrap())
-                        .collect::<Vec<Method>>()
-                        .contains(method)
-            })
-            .collect()
+        set.matches(uri).into_iter().filter(|i| {
+            if !self.rule_collection[*i].active {
+                return false;
+            }
+
+            let mut probability_matches = true;
+            if let Some(prob) = self.rule_collection[*i].match_with_prob {
+                probability_matches = rng.gen_range(0.0, 1.0) < prob;
+            }
+
+            let mut body_matches = true;
+            if let Some(match_body) = &self.rule_collection[*i].match_body_contains {
+                body_matches = body.contains(match_body);
+            }
+
+            let method_matches = self.rule_collection[*i]
+                .match_methods
+                .as_ref()
+                .unwrap_or(&vec![
+                    "GET".to_owned(),
+                    "OPTIONS".to_owned(),
+                    "POST".to_owned(),
+                    "PUT".to_owned(),
+                    "DELETE".to_owned(),
+                    "HEAD".to_owned(),
+                    "TRACE".to_owned(),
+                    "CONNECT".to_owned(),
+                    "PATCH".to_owned(),
+                ])
+                .iter()
+                .map(|s| Method::from_str(s).unwrap())
+                .collect::<Vec<Method>>()
+                .contains(method);
+
+            probability_matches && body_matches && method_matches
+
+        }).collect()
     }
 
     pub fn clone_rule(&mut self, idx: usize) -> RuleCollection {
