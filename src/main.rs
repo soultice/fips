@@ -3,6 +3,7 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
+
 use terminal_ui;
 use configuration;
 use plugin_registry;

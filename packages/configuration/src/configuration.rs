@@ -1,3 +1,4 @@
+
 use super::rule_collection::RuleCollection;
 use hyper::Method;
 use rand::Rng;
@@ -11,6 +12,20 @@ use tui::text::Spans;
 use tui::widgets::{List, ListItem};
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
+
+lazy_static! {
+    static ref HTTP_METHODS: Vec<String> = vec![
+        String::from("GET"),
+        String::from("OPTIONS"),
+        String::from("POST"),
+        String::from("PUT"),
+        String::from("DELETE"),
+        String::from("HEAD"),
+        String::from("TRACE"),
+        String::from("CONNECT"),
+        String::from("PATCH"),
+    ];
+}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Configuration {
@@ -80,7 +95,7 @@ impl Configuration {
                     let extension = path.extension()?.to_str();
                     match extension {
                         Some(ext) if regex_matcher.is_match(ext) => Some(path),
-                        _ => None
+                        _ => None,
                     }
                 }
                 _ => None,
@@ -100,49 +115,44 @@ impl Configuration {
 
     pub fn active_matching_rules(&mut self, uri: &str, method: &Method, body: &str) -> Vec<usize> {
         let mut rng = rand::thread_rng();
-        let path_regex: Vec<String> = self
+
+        let rule_path_names: Vec<String> = self
             .rule_collection
             .iter()
             .map(|rule| rule.path.to_owned())
             .collect();
-        let set = RegexSet::new(&path_regex).unwrap();
-        set.matches(uri).into_iter().filter(|i| {
-            if !self.rule_collection[*i].active {
-                return false;
-            }
 
-            let mut probability_matches = true;
-            if let Some(prob) = self.rule_collection[*i].match_with_prob {
-                probability_matches = rng.gen_range(0.0, 1.0) < prob;
-            }
+        let set = RegexSet::new(&rule_path_names).unwrap();
 
-            let mut body_matches = true;
-            if let Some(match_body) = &self.rule_collection[*i].match_body_contains {
-                body_matches = body.contains(match_body);
-            }
+        set.matches(uri)
+            .into_iter()
+            .filter(|i| {
+                if !self.rule_collection[*i].active {
+                    return false;
+                }
 
-            let method_matches = self.rule_collection[*i]
-                .match_methods
-                .as_ref()
-                .unwrap_or(&vec![
-                    "GET".to_owned(),
-                    "OPTIONS".to_owned(),
-                    "POST".to_owned(),
-                    "PUT".to_owned(),
-                    "DELETE".to_owned(),
-                    "HEAD".to_owned(),
-                    "TRACE".to_owned(),
-                    "CONNECT".to_owned(),
-                    "PATCH".to_owned(),
-                ])
-                .iter()
-                .map(|s| Method::from_str(s).unwrap())
-                .collect::<Vec<Method>>()
-                .contains(method);
+                let mut probability_matches = true;
+                if let Some(prob) = self.rule_collection[*i].match_with_prob {
+                    probability_matches = rng.gen_range(0.0, 1.0) < prob;
+                }
 
-            probability_matches && body_matches && method_matches
+                let mut body_matches = true;
+                if let Some(match_body) = &self.rule_collection[*i].match_body_contains {
+                    body_matches = body.contains(match_body);
+                }
 
-        }).collect()
+                let method_matches = self.rule_collection[*i]
+                    .match_methods
+                    .as_ref()
+                    .unwrap_or(&HTTP_METHODS)
+                    .iter()
+                    .map(|s| Method::from_str(s).unwrap())
+                    .collect::<Vec<Method>>()
+                    .contains(method);
+
+                probability_matches && body_matches && method_matches
+            })
+            .collect()
     }
 
     pub fn clone_rule(&mut self, idx: usize) -> RuleCollection {
