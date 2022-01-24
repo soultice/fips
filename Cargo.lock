@@ -120,6 +120,7 @@ name = "configuration"
 version = "0.1.0"
 dependencies = [
  "hyper",
+ "lazy_static",
  "plugin_registry",
  "rand",
  "regex",
