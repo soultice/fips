@@ -1,9 +1,9 @@
 use super::request::pimps;
-use terminal_ui::debug::{PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
-use terminal_ui::state::State;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
+use terminal_ui::debug::{PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
+use terminal_ui::state::State;
 
 pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
     let req_info = RequestInfo::from(&req);
@@ -18,17 +18,41 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
     let body_bytes = hyper::body::to_bytes(body).await?;
     let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
 
-    let matching_rules = state.configuration.lock().unwrap().active_matching_rules(
-        uri.path(),
-        &method,
-        &body_text
-    );
+    if method == "OPTIONS" {
+        let mut preflight = Response::new(Body::default());
+        preflight
+            .headers_mut()
+            .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+        preflight.headers_mut().insert(
+            "Access-Control-Allow-Headers",
+            HeaderValue::from_static("*"),
+        );
+        preflight.headers_mut().insert(
+            "Access-Control-Allow-Methods",
+            HeaderValue::from_static("*"),
+        );
+        return Ok(preflight);
+    }
 
+    let matching_rules =
+        state
+            .configuration
+            .lock()
+            .unwrap()
+            .active_matching_rules(uri.path(), &method, &body_text);
 
     match matching_rules.len() {
         0 => {
             let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
             *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
+            no_matching_rule.headers_mut().insert(
+                "Access-Control-Allow-Headers",
+                HeaderValue::from_static("*"),
+            );
+            no_matching_rule.headers_mut().insert(
+                "Access-Control-Allow-Methods",
+                HeaderValue::from_static("*"),
+            );
             state
                 .add_message(PrintInfo::PLAIN(format!(
                     "No matching rule found for URI: {}",
@@ -39,23 +63,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
         }
 
         _ => match (&method, uri.path()) {
-            (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::from(""))),
-
-            (&Method::OPTIONS, _) => {
-                let mut preflight = Response::new(Body::from(""));
-                preflight
-                    .headers_mut()
-                    .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-                preflight.headers_mut().insert(
-                    "Access-Control-Allow-Headers",
-                    HeaderValue::from_static("*"),
-                );
-                preflight.headers_mut().insert(
-                    "Access-Control-Allow-Methods",
-                    HeaderValue::from_static("*"),
-                );
-                Ok(preflight)
-            }
+            (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::default())),
 
             _ => {
                 let mut first_matched_rule = state
@@ -64,9 +72,10 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                     .unwrap()
                     .clone_rule(matching_rules[0]);
 
-                let resp: Response<Body> = pimps(body_bytes, parts, &state, &mut first_matched_rule)
-                    .await
-                    .unwrap();
+                let resp: Response<Body> =
+                    pimps(body_bytes, parts, &state, &mut first_matched_rule)
+                        .await
+                        .unwrap();
 
                 let response_info = ResponseInfo::from(&resp);
 
