@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 json_dotpath = "1.0.3"
 libloading = "0.6.6"
+serde = "1.0.118"
+serde_json = "1.0.60"

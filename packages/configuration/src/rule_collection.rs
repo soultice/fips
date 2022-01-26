@@ -1,7 +1,7 @@
 use super::mode::Mode;
 use super::rule::Rule;
-use plugin_registry::plugin::ExternalFunctions;
 use hyper::Uri;
+use plugin_registry::plugin::ExternalFunctions;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -42,7 +42,12 @@ impl RuleCollection {
     pub fn expand_rule_template(&mut self, plugins: &ExternalFunctions) -> () {
         if let Some(rules) = &mut self.rules {
             for rule in rules {
-                recursive_expand(&mut rule.item, plugins);
+                match &mut rule.item {
+                    Some(item) => {
+                        recursive_expand(item, plugins);
+                    },
+                    _ => {}
+                }
             }
         }
     }
@@ -71,12 +76,12 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
         serde_json::Value::String(val) => match val.as_str() {
             _ => {
                 if plugins.has(val) {
-                    let result = plugins.call(&val, &[1.0]).expect("Invocation failed");
-                    let try_serialize = serde_json::from_str(&result.clone());
+                    let result = plugins.call(&val, vec![]).expect("Invocation failed");
+                    let try_serialize = serde_json::from_str(&result);
                     if let Ok(i) = try_serialize {
                         *value = i;
                     } else {
-                        *val = result.clone();
+                        *value = serde_json::Value::String(result);
                     }
                 }
             }
@@ -87,8 +92,32 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
             }
         }
         serde_json::Value::Object(val) => {
-            for (_, i) in val {
-                recursive_expand(i, plugins);
+            let plugin = val.get("plugin");
+            let args = val.get("args");
+            match (plugin, args) {
+                (Some(p), Some(a)) => {
+                    match (p, a) {
+                        (
+                            serde_json::Value::String(function),
+                            serde_json::Value::Array(arguments),
+                        ) => {
+                            let result = plugins.call(function, arguments.clone()).expect("Invocation failed");
+                            let try_serialize = serde_json::from_str(&result);
+                            if let Ok(i) = try_serialize {
+                                *value = i;
+                            } else {
+                                *value = serde_json::Value::String(result);
+                            }
+                        }
+                        // wrong format of plugin & args combo
+                        _ => {}
+                    }
+                }
+                _ => {
+                    for (_, i) in val {
+                        recursive_expand(i, plugins);
+                    }
+                }
             }
         }
         _ => {}

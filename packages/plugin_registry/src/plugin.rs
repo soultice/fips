@@ -6,6 +6,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs, io};
+use serde_json::Value;
 
 pub struct FunctionProxy {
     function: Box<dyn Function + Send>,
@@ -13,7 +14,7 @@ pub struct FunctionProxy {
 }
 
 impl Function for FunctionProxy {
-    fn call(&self, args: &[f64]) -> Result<String, InvocationError> {
+    fn call(&self, args: Vec<Value>) -> Result<String, InvocationError> {
         self.function.call(args)
     }
 
@@ -96,7 +97,7 @@ impl ExternalFunctions {
         Ok(())
     }
 
-    pub fn call(&self, function: &str, arguments: &[f64]) -> Result<String, InvocationError> {
+    pub fn call(&self, function: &str, arguments: Vec<Value>) -> Result<String, InvocationError> {
         self.functions
             .get(function)
             .ok_or_else(|| format!("\"{}\" not found", function))?

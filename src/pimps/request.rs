@@ -1,7 +1,5 @@
 use crate::client::AppClient;
 use crate::configuration::{Mode, Rule, RuleCollection};
-use terminal_ui::state::{State};
-use terminal_ui::debug::{PimpsInfo, PrintInfo};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
@@ -10,9 +8,11 @@ use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::error::Error;
+use terminal_ui::debug::{PimpsInfo, PrintInfo};
+use terminal_ui::state::State;
 
 struct Mox;
 
@@ -53,7 +53,14 @@ impl Mox {
     ) -> Result<(), Box<dyn Error>> {
         if let Some(rules) = rules {
             for rule in rules {
-                resp_json.dot_set(&rule.path, rule.item.clone())?;
+                match &rule.path {
+                    Some(path) => {
+                        resp_json.dot_set(&path, rule.item.clone())?;
+                    }
+                    None => {
+                        resp_json.dot_set("", rule.item.clone())?;
+                    }
+                }
             }
         }
         Ok(())
@@ -142,11 +149,19 @@ pub async fn pimps<'r>(
         }
         Mode::MOCK => {
             first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
-            let body = Body::from(serde_json::to_string(
-                &first_matched_rule.rules.as_ref().unwrap()[0].item,
-            )?);
-            let returned_response = Response::new(body);
-            returned_response
+            let body = match &first_matched_rule.rules {
+                Some(rules) => match rules.len() {
+                    0 => Response::new(Body::default()),
+                    _ => {
+                        let body = Body::from(serde_json::to_string(&rules[0].item)?);
+                        Response::new(body)
+                    }
+                },
+                None => {
+                    Response::new(Body::default())
+                }
+            };
+            body
         }
     };
 

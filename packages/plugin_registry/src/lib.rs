@@ -1,8 +1,9 @@
 pub mod plugin;
 pub use plugin::ExternalFunctions;
+use serde_json::Value;
 
 pub trait Function {
-    fn call(&self, args: &[f64]) -> Result<String, InvocationError>;
+    fn call(&self, args: Vec<Value>) -> Result<String, InvocationError>;
 
     /// Help text that may be used to display information about this function.
     fn help(&self) -> Option<&str> {

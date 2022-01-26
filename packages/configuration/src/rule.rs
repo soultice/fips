@@ -3,6 +3,6 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Rule {
-    pub path: String,
-    pub item: Value,
+    pub path: Option<String>,
+    pub item: Option<Value>,
 }

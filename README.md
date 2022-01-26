@@ -8,7 +8,7 @@ P.I.M.P.S provides three different functionalities: It can function as a Mock se
 
 ## Installation
 
-Binaries for Linux and Windows are attached to each release on the release page. If you wish you can also build it from the sources:
+Due to Daimler internals, binaries can currently not be provided. If you wish to use P.I.M.P.S, build it from the sources:
 
 - Install [rust and cargo](cargo).
 - Checkout this repo.
@@ -33,8 +33,8 @@ Also see `pimps(.exe) --help`
 
 ## Usage
 
-P.I.M.P.Ss configuration is placed in `.yaml` files they are loaded at startup from the `--config` directory.
-For each request, P.I.M.P.S will check against the `.yaml` files if any config object matches the current request URI.
+P.I.M.P.Ss configuration is placed in `.yaml` or `.yml` files. They are loaded at startup from the `--config` directory.
+For each request, P.I.M.P.S will check against the configuration files if any config object matches the current request URI.
 If it does, one of the three modes do apply implicitly by the configuration given.
 
 | Mode  | forwardUri | rules |
@@ -50,14 +50,12 @@ Meaning if you've set `forwardUri` but havent set any `rules`, then P.I.M.P.S wi
 - P.I.M.P.S uses regex to match against paths. `/foo/bar` in a config path will also match for `/foo/bar/baz`, so you need to be as explicit as possible if you care.
 - If multiple rules match, only the first rule will apply.
 - Rules are applied in the order they appear - so order matters.
-- The config file is not checked for spelling.
+- The config file is not checked for spelling, the server will panic if it is unable to read a configuration file due to spelling errors.
 - Object manipulation uses the [dotpath crate](dotpath). The syntax is noted below.
-- If you wish to mock a request without any body (e.g. only the response status matters) you still need to provide `path` and `rules`, you can do so with 
+- If you wish to mock a request without any body (e.g. only the response status matters) you still need to provide the `rules` Array, however you can leave it empty:
   ```yaml
   path: ^/foo/$
-  rules:
-    path:
-    item:
+  rules: []
   ```
 
 ## Example configuration in `config.yaml`
@@ -171,11 +169,12 @@ Example plugin implementation:
 ```rust
 use pimps::{PluginRegistrar, Function, InvocationError};
 use fake::{faker::name::raw::NameWithTitle, locales::EN, Fake};
+use serde_json::Value
 
 pub struct Random;
 
 impl Function for Random {
-    fn call(&self, args: &[f64]) -> Result<String, InvocationError> {
+    fn call(&self, args: Vec<Value>) -> Result<String, InvocationError> {
         let random_fake_name: String = NameWithTitle(EN).fake();
         let json_serializable = format!("{{\"bar\": [\"{}\"]}}", random_fake_name).to_owned();
         Ok(json_serializable)
@@ -196,9 +195,29 @@ Example `config.yaml`
 ```yaml
 - path: ^/randomname/$
   rules:
-    - path: 
       item:
         foo: '{{Name}}'
+```
+
+Example output of `curl localhost:8888/randomname/ | jq`
+
+```json
+{
+  "foo": {
+    "bar": ["Ms. Destiney Metz"]
+  }
+}
+```
+
+Plugins can also be passed arguments via the configuration files. If you wish to do so, the plugin has to be configured as an object in your configuration yaml:
+
+```yaml
+- path: ^/randomname/$
+  rules:
+      item:
+        foo:
+          plugin: '{{Name}}',
+          args: [ "foo", 1, "bar" ]
 ```
 
 Example output of `curl localhost:8888/randomname/ | jq`

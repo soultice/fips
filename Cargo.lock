@@ -630,6 +630,8 @@ version = "0.1.0"
 dependencies = [
  "json_dotpath",
  "libloading",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
