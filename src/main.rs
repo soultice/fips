@@ -8,7 +8,7 @@ use terminal_ui;
 use configuration;
 use plugin_registry;
 mod client;
-mod pimps;
+mod fips;
 
 use terminal_ui::cli::{ui, App};
 
@@ -55,7 +55,7 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
                 let route_capture = Arc::clone(&inner_capture);
-                async move { pimps::routes(req, route_capture).await }
+                async move { fips::routes(req, route_capture).await }
             }))
         }
     });

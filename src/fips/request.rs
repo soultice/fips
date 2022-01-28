@@ -11,12 +11,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
-use terminal_ui::debug::{PimpsInfo, PrintInfo};
+use terminal_ui::debug::{FipsInfo, PrintInfo};
 use terminal_ui::state::State;
 
-struct Mox;
+struct Fips;
 
-impl Mox {
+impl Fips {
     pub async fn forward_request(
         uri: &Uri,
         method: &Method,
@@ -108,7 +108,7 @@ impl Mox {
     }
 }
 
-pub async fn pimps<'r>(
+pub async fn handle_mode<'r>(
     body: Bytes,
     parts: Parts,
     state: &Arc<State>,
@@ -120,10 +120,10 @@ pub async fn pimps<'r>(
     let mode: Mode = first_matched_rule.mode();
 
     let mut returned_response = match mode {
-        Mode::PROXY | Mode::PIMPS => {
+        Mode::PROXY | Mode::FIPS => {
             let uri = &first_matched_rule.forward_url(&uri);
 
-            let (client_parts, mut resp_json) = Mox::forward_request(
+            let (client_parts, mut resp_json) = Fips::forward_request(
                 uri,
                 method,
                 first_matched_rule.forward_headers.clone(),
@@ -136,7 +136,7 @@ pub async fn pimps<'r>(
             first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
-            Mox::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
+            Fips::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
 
             let final_response_string = serde_json::to_string(&resp_json)?;
             let returned_response = match final_response_string {
@@ -165,16 +165,16 @@ pub async fn pimps<'r>(
         }
     };
 
-    Mox::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
+    Fips::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
 
-    Mox::add_headers(&first_matched_rule.headers, &mut returned_response)?;
+    Fips::add_headers(&first_matched_rule.headers, &mut returned_response)?;
 
-    Mox::set_status(&first_matched_rule.response_status, &mut returned_response)?;
+    Fips::set_status(&first_matched_rule.response_status, &mut returned_response)?;
     // Add or change response status
 
     let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
     state
-        .add_message(PrintInfo::PIMPS(PimpsInfo {
+        .add_message(PrintInfo::FIPS(FipsInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),

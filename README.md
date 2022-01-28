@@ -1,23 +1,23 @@
-# Pluggable Injecting Mock and Proxy Server - in short P.I.M.P.S - mock and proxy within seconds
+# Fake Injecting Proxy Server - in short Fips - fake and proxy within seconds
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## About
 
-P.I.M.P.S provides three different functionalities: It can function as a Mock server, it can function as a simple proxy server, and it can be a mixture of both, manipulating responses on the fly - defined by your own rules. As such, P.I.M.P.S is best used if you wish to quickly setup an endpoint and test it in your application - the backend work is currently blocked? No problem. Start the application and host a mock endpoint while proxying the remainders of your endpoints to the actual backend.
+Fips provides three different functionalities: It can function as a Fake data server, it can function as a simple proxy server, and it can be a mixture of both, manipulating responses on the fly - defined by your own rules. As such, Fips is best used if you wish to quickly setup an endpoint and test it in your application - the backend work is currently blocked? No problem. Start the application and host a mock endpoint while proxying the remainders of your endpoints to the actual backend.
 
 ## Installation
 
-Due to Daimler internals, binaries can currently not be provided. If you wish to use P.I.M.P.S, build it from the sources:
+Due to Daimler internals, binaries can currently not be provided. If you wish to use Fips, build it from the sources:
 
 - Install [rust and cargo](cargo).
 - Checkout this repo.
 - Dir into it and run `cargo run` - or `cargo build` if you wish to produce an executable.
 
 ## Cli Arguments
-Also see `pimps(.exe) --help`
+Also see `fips(.exe) --help`
 ```yaml
-  # Start pimps on this port
+  # Start fips on this port
   --port: 8888
   # Load plugins from this directory, detault is the current directory.
   --plugins: .
@@ -30,26 +30,27 @@ Also see `pimps(.exe) --help`
 <kdb>Shift</kdb>Tab</kdb> Go to previous Tab
 <kdb>c</kdb> clear the log output
 <kdb>r</kdb> reload config files
+<kdb>Esc</kdb> quit
 
 ## Usage
 
-P.I.M.P.Ss configuration is placed in `.yaml` or `.yml` files. They are loaded at startup from the `--config` directory.
-For each request, P.I.M.P.S will check against the configuration files if any config object matches the current request URI.
+Fipss configuration is placed in `.yaml` or `.yml` files. They are loaded at startup from the `--config` directory.
+For each request, Fips will check against the configuration files if any config object matches the current request URI.
 If it does, one of the three modes do apply implicitly by the configuration given.
 
 | Mode  | forwardUri | rules |
 | ----- | :--------: | ----- |
-| P.I.M.P.S  |     ✔️     | ✔️    |
+| Fips  |     ✔️     | ✔️    |
 | proxy |     ✔️     | ❌    |
 | mock  |     ❌     | ✔️    |
 
-Meaning if you've set `forwardUri` but havent set any `rules`, then P.I.M.P.S will function as a proxy server.
+Meaning if you've set `forwardUri` but havent set any `rules`, then Fips will function as a proxy server.
 
 ❗ **Things to keep in mind for your config:**
 
-- P.I.M.P.S uses regex to match against paths. `/foo/bar` in a config path will also match for `/foo/bar/baz`, so you need to be as explicit as possible if you care.
-- If multiple rules match, only the first rule will apply.
-- Rules are applied in the order they appear - so order matters.
+- Fips uses regex to match against paths. `/foo/bar` in a config path will also match for `/foo/bar/baz`, so you need to be as explicit as possible if you care.
+- If multiple rules match, only the first matching rule will apply.
+- Rules are applied in the order they appear - so order matters!.
 - The config file is not checked for spelling, the server will panic if it is unable to read a configuration file due to spelling errors.
 - Object manipulation uses the [dotpath crate](dotpath). The syntax is noted below.
 - If you wish to mock a request without any body (e.g. only the response status matters) you still need to provide the `rules` Array, however you can leave it empty:
@@ -62,7 +63,7 @@ Meaning if you've set `forwardUri` but havent set any `rules`, then P.I.M.P.S wi
 
 See also the `examples` directory for more example configurations.
 
-1. Any request arriving at P.I.M.P.S with the URI `/foo/bar` will return `['this is a lot of fun']`
+1. Any request arriving at Fips with the URI `/foo/bar` will return `['this is a lot of fun']`
 
 ```yaml
 - path: ^/foo/bar/$
@@ -105,7 +106,7 @@ Main configuration:
     path: String
     # This name will be displayed for debugging purposes
     name: String
-    # P.I.M.P.S will change the response status to this value
+    # Fips will change the response status to this value
     responseStatus: u16,
     # Sleep for ms
     sleep: u64
@@ -159,15 +160,15 @@ Rule:
 
 ## Extension
 
-One of P.I.M.P.Ss key features is its extension system. P.I.M.P.S exports a rust macro `export_plugin`.
+One of Fipss key features is its extension system. Fips exports a rust macro `export_plugin`.
 Your extension can make use of this macro to register a plugin.
 The plugins name will be matched against your configuration. If a match occurs, the pattern will be replaced
-with the output of your plugin. All plugins matching your OS in the `plugins` directory relative to the P.I.M.P.S binary will be loaded automatically at startup.
+with the output of your plugin. All plugins matching your OS in the `plugins` directory relative to the Fips binary will be loaded automatically at startup.
 
 Example plugin implementation:
 
 ```rust
-use pimps::{PluginRegistrar, Function, InvocationError};
+use fips::{PluginRegistrar, Function, InvocationError};
 use fake::{faker::name::raw::NameWithTitle, locales::EN, Fake};
 use serde_json::Value
 
@@ -181,14 +182,14 @@ impl Function for Random {
     }
 }
 
-pimps::export_plugin!(register);
+fips::export_plugin!(register);
 
 extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
     registrar.register_function("{{Name}}", Box::new(Random));
 }
 ```
 
-Above code registers the plugin on the P.I.M.P.S plugin registry.  The plugins `name` `{{Name}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
+Above code registers the plugin on the Fips plugin registry.  The plugins `name` `{{Name}}` will be matched when a matching rule is found, the `json serializeable(!)` return value will be used to replace your pattern in the matching rule.
 
 Example `config.yaml`
 
@@ -240,3 +241,4 @@ This Project is Licensed under the [MIT License](LICENSE)
 
 [cargo]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 [dotpath]: https://crates.io/crates/json_dotpath
+

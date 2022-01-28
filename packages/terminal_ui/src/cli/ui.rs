@@ -14,7 +14,7 @@ use tui::{
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let app_title = format!(
-        "P.I.M.P.S──live on {} 😌, using config path: {}",
+        "Fips──live on {} 😌, using config path: {}",
         app.opts.port,
         app.opts.config.clone().to_str().unwrap()
     );
@@ -42,7 +42,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .iter()
         .map(|x| match x {
             PrintInfo::PLAIN(info) => Spans::from(info.clone()),
-            PrintInfo::PIMPS(info) => Spans::from(info),
+            PrintInfo::FIPS(info) => Spans::from(info),
         })
         .collect();
 

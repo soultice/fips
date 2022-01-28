@@ -1,4 +1,4 @@
-use super::request::pimps;
+use super::request::handle_mode;
 use hyper::header::{HeaderMap, HeaderValue};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
@@ -18,7 +18,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
     let body_bytes = hyper::body::to_bytes(body).await?;
     let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
 
-    if method == "OPTIONS" {
+    if method == Method::OPTIONS {
         let mut preflight = Response::new(Body::default());
         add_cors_headers(preflight.headers_mut());
         return Ok(preflight);
@@ -56,7 +56,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                     .clone_rule(matching_rules[0]);
 
                 let resp: Response<Body> =
-                    pimps(body_bytes, parts, &state, &mut first_matched_rule)
+                    handle_mode(body_bytes, parts, &state, &mut first_matched_rule)
                         .await
                         .unwrap();
 

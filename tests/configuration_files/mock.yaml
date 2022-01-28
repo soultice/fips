@@ -1,7 +1,7 @@
 - path: ^/mock/foo/$
   active: true
   headers:
-    x-app-name: P.I.M.P.S
+    x-app-name: Fips
   rules:
     - path:
       item:

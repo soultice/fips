@@ -1,6 +1,6 @@
-use super::pimps_info::PimpsInfo;
+use super::fips_info::FipsInfo;
 
 pub enum PrintInfo {
     PLAIN(String),
-    PIMPS(PimpsInfo),
+    FIPS(FipsInfo),
 }
