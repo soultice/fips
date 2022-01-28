@@ -1,5 +1,5 @@
 use super::request::pimps;
-use hyper::header::HeaderValue;
+use hyper::header::{HeaderMap, HeaderValue};
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
 use terminal_ui::debug::{PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
@@ -20,17 +20,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
 
     if method == "OPTIONS" {
         let mut preflight = Response::new(Body::default());
-        preflight
-            .headers_mut()
-            .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-        preflight.headers_mut().insert(
-            "Access-Control-Allow-Headers",
-            HeaderValue::from_static("*"),
-        );
-        preflight.headers_mut().insert(
-            "Access-Control-Allow-Methods",
-            HeaderValue::from_static("*"),
-        );
+        add_cors_headers(preflight.headers_mut());
         return Ok(preflight);
     }
 
@@ -45,14 +35,7 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
         0 => {
             let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
             *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
-            no_matching_rule.headers_mut().insert(
-                "Access-Control-Allow-Headers",
-                HeaderValue::from_static("*"),
-            );
-            no_matching_rule.headers_mut().insert(
-                "Access-Control-Allow-Methods",
-                HeaderValue::from_static("*"),
-            );
+            add_cors_headers(no_matching_rule.headers_mut());
             state
                 .add_message(PrintInfo::PLAIN(format!(
                     "No matching rule found for URI: {}",
@@ -90,4 +73,16 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
             }
         },
     }
+}
+
+fn add_cors_headers(headers: &mut HeaderMap) {
+    headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    headers.insert(
+        "Access-Control-Allow-Headers",
+        HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        "Access-Control-Allow-Methods",
+        HeaderValue::from_static("*"),
+    );
 }
