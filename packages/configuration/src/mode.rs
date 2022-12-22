@@ -3,4 +3,5 @@ pub enum Mode {
     PROXY,
     FIPS,
     MOCK,
+    STATIC,
 }

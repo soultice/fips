@@ -20,6 +20,8 @@ pub struct RuleCollection {
     pub match_body_contains: Option<String>,
     #[serde(rename = "matchMethods")]
     pub match_methods: Option<Vec<String>>,
+    #[serde(rename = "serveStatic")]
+    pub serve_static: Option<String>,
     #[serde(skip)]
     pub selected: bool,
     pub sleep: Option<u64>,
@@ -38,6 +40,28 @@ pub struct RuleCollection {
     pub rules: Option<Vec<Rule>>,
 }
 
+impl Default for RuleCollection {
+    fn default() -> RuleCollection {
+        RuleCollection {
+            name: Some(String::from("fallback rule if no others found")),
+            serve_static: Some(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
+            match_body_contains: None,
+            match_methods: None,
+            match_with_prob: None,
+            sleep: None,
+            selected: true,
+            active: true,
+            path: String::from("^/.*$"),
+            forward_uri: None,
+            headers: None,
+            forward_headers: None,
+            backward_headers: None,
+            rules: None,
+            response_status: None,
+        }
+    }
+}
+
 impl RuleCollection {
     pub fn expand_rule_template(&mut self, plugins: &ExternalFunctions) -> () {
         if let Some(rules) = &mut self.rules {
@@ -45,7 +69,7 @@ impl RuleCollection {
                 match &mut rule.item {
                     Some(item) => {
                         recursive_expand(item, plugins);
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -53,9 +77,10 @@ impl RuleCollection {
     }
 
     pub fn mode(&self) -> Mode {
-        let mode: Mode = match (&self.forward_uri, &self.rules) {
-            (Some(_), Some(_)) => Mode::FIPS,
-            (None, Some(_)) => Mode::MOCK,
+        let mode: Mode = match (&self.forward_uri, &self.rules, &self.serve_static) {
+            (Some(_), Some(_), None) => Mode::FIPS,
+            (None, Some(_), None) => Mode::MOCK,
+            (None, None, Some(_)) => Mode::STATIC,
             _ => Mode::PROXY,
         };
         mode
@@ -101,7 +126,9 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
                             serde_json::Value::String(function),
                             serde_json::Value::Array(arguments),
                         ) => {
-                            let result = plugins.call(function, arguments.clone()).expect("Invocation failed");
+                            let result = plugins
+                                .call(function, arguments.clone())
+                                .expect("Invocation failed");
                             let try_serialize = serde_json::from_str(&result);
                             if let Ok(i) = try_serialize {
                                 *value = i;

@@ -3,17 +3,16 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-
-use terminal_ui;
 use configuration;
 use plugin_registry;
+use terminal_ui;
 mod client;
 mod fips;
 
 use terminal_ui::cli::{ui, App};
 
 use bytes;
-use configuration::Configuration;
+use configuration::{Configuration};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
@@ -34,14 +33,13 @@ use std::{
 use tokio::runtime::Runtime;
 use tui::{backend::CrosstermBackend, Terminal};
 
-use terminal_ui::debug::{PrintInfo};
-use terminal_ui::util;
+use clap::Parser;
+use std::net::SocketAddr;
 use terminal_ui::cli::options::Opts;
 use terminal_ui::cli::state::State;
-use std::net::SocketAddr;
+use terminal_ui::debug::PrintInfo;
+use terminal_ui::util;
 use tokio::task::JoinHandle;
-use clap::Parser;
-
 
 enum Event<I> {
     Input(I),
@@ -69,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
     let plugins = ExternalFunctions::new(&opts.plugins);
-    let configuration = Configuration::new(&opts.config);
+    let configuration = Configuration::new(&opts.config).unwrap_or(Configuration::default());
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),

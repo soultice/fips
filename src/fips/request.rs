@@ -116,6 +116,7 @@ pub async fn handle_mode<'r>(
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let method = &parts.method;
     let uri = &parts.uri;
+    let headers = &parts.headers;
 
     let mode: Mode = first_matched_rule.mode();
 
@@ -157,11 +158,20 @@ pub async fn handle_mode<'r>(
                         Response::new(body)
                     }
                 },
-                None => {
-                    Response::new(Body::default())
-                }
+                None => Response::new(Body::default()),
             };
             body
+        }
+        Mode::STATIC => {
+            let result = hyper_staticfile::resolve_path(
+                &first_matched_rule.serve_static.clone().unwrap(),
+                &parts.uri.to_string(),
+            )
+            .await?;
+            let response = hyper_staticfile::ResponseBuilder::new()
+                .request_parts(method, uri, headers)
+                .build(result)?;
+            response
         }
     };
 

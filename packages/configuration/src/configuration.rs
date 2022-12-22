@@ -34,16 +34,26 @@ pub struct Configuration {
     loaded_paths: Vec<PathBuf>,
 }
 
+impl Default for Configuration {
+    fn default() -> Self {
+       Configuration { selected:  0, rule_collection: vec![RuleCollection::default()], loaded_paths: vec![] } 
+    }
+}
+
 impl Configuration {
-    pub fn new(path_to_config: &PathBuf) -> Configuration {
+    pub fn new(path_to_config: &PathBuf) -> Result<Configuration> {
         let mut rules = Configuration {
             selected: 0,
             rule_collection: Vec::new(),
             loaded_paths: Vec::new(),
         };
         rules.load_from_path(path_to_config).unwrap();
-        rules.rule_collection[0].selected = true;
-        rules
+        if let Some(x) = rules.rule_collection.get_mut(0) {
+            x.selected = true;
+            Ok(rules)
+        } else {
+            Err("could not find rulecollections".into())
+        }
     }
 
     pub fn toggle_rule(&mut self) {

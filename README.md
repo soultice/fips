@@ -38,11 +38,12 @@ Fipss configuration is placed in `.yaml` or `.yml` files. They are loaded at sta
 For each request, Fips will check against the configuration files if any config object matches the current request URI.
 If it does, one of the three modes do apply implicitly by the configuration given.
 
-| Mode  | forwardUri | rules |
-| ----- | :--------: | ----- |
-| Fips  |     ✔️     | ✔️    |
-| proxy |     ✔️     | ❌    |
-| mock  |     ❌     | ✔️    |
+| Mode              | forwardUri | rules | serveStatic |
+| -----             | :--------: | ----- | ----------- |
+| Fips              |     ✔ ️     |   ✔   |     ❌      |
+| proxy             |     ✔ ️     |   ❌  |     ❌      |
+| mock              |     ❌     |   ✔   |     ❌      |
+| static (fallback) |     ❌     |   ❌  |      ✔      | 
 
 Meaning if you've set `forwardUri` but havent set any `rules`, then Fips will function as a proxy server.
 
