@@ -11,6 +11,9 @@ members = [
 	"packages/plugin_registry",
 ]
 
+[features]
+enablelog = ['plugin_registry/enablelog']
+
 [dependencies]
 terminal_ui = { path = "./packages/terminal_ui" }
 plugin_registry = { path = "./packages/plugin_registry" }
@@ -26,5 +29,7 @@ serde = "1.0.118"
 serde_json = "1.0.60"
 json-patch = "*"
 crossterm = "0.18"
+log4rs = "1.2.0"
+log = "0.4.17"
 futures="0.3.19"
 json_dotpath = "1.0.3"
