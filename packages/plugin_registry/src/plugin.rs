@@ -75,6 +75,9 @@ impl ExternalFunctions {
     }
 
     pub fn load_from_path(&mut self, plugin_dir: &PathBuf) -> io::Result<()> {
+        #[cfg(feature = "enablelog")]
+        log::info!("Loading plugins from {:?}", plugin_dir);
+
         let abs_path_to_plugins = std::fs::canonicalize(plugin_dir).unwrap();
         let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
             .filter_map(|res| match env::consts::OS {
@@ -82,12 +85,18 @@ impl ExternalFunctions {
                     Ok(e) if e.path().extension()? == "dll" || e.path().extension()? == "module" => Some(e.path()),
                     _ => None,
                 },
+                "macos" => match res {
+                    Ok(e) if e.path().extension()? == "dylib" || e.path().extension()? == "module" => Some(e.path()),
+                    _ => None,
+                }
                 _ => match res {
                     Ok(e) if e.path().extension()? == "so" || e.path().extension()? == "module" => Some(e.path()),
                     _ => None,
                 },
             })
             .collect();
+        #[cfg(feature = "enablelog")]
+        log::info!("Found {} plugins", entries.len());
 
         unsafe {
             for path in entries.iter() {

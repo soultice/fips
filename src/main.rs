@@ -62,8 +62,39 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
     handle
 }
 
+#[cfg(feature = "enablelog")]
+use log::LevelFilter;
+#[cfg(feature = "enablelog")]
+use log4rs::append::file::FileAppender;
+#[cfg(feature = "enablelog")]
+use log4rs::config::{Appender, Config, Root};
+#[cfg(feature = "enablelog")]
+use log4rs::encode::pattern::PatternEncoder;
+
+#[cfg(feature = "enablelog")]
+fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
+
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
+        .build("log/fips.log")?;
+
+    let config = Config::builder()
+        .appender(Appender::builder().build("logfile", Box::new(logfile)))
+        .build(Root::builder().appender("logfile").build(LevelFilter::Info))?;
+
+    log4rs::init_config(config)?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "enablelog")]
+    init_logging()?;
+
+    #[cfg(feature = "enablelog")]
+    log::info!("Starting FIPS");
+
     let opts: Opts = Opts::parse();
 
     let plugins = ExternalFunctions::new(&opts.plugins);
