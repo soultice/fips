@@ -95,6 +95,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "enablelog")]
     log::info!("Starting FIPS");
 
+    #[cfg(feature = "enablelog")]
+        std::panic::set_hook({Box::new(|e| {
+            log::error!("Panic: {}", e);
+    })});
+
     let opts: Opts = Opts::parse();
 
     let plugins = ExternalFunctions::new(&opts.plugins);
