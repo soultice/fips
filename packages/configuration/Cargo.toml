@@ -11,8 +11,13 @@ serde_yaml = "0.8.14"
 serde = "1.0.118"
 serde_json = "1.0.60"
 regex = "1.4.2"
-tui = { version = "0.13", default-features = false, features = ['crossterm'] }
 rand = "0.7"
 hyper = { version = "0.14", features = ["full"] }
 strum_macros = "0.20"
 lazy_static = "1.4.0"
+
+[dependencies.tui]
+git = "https://github.com/soultice/tui-rs.git"
+default-features = false
+features = ['crossterm']
+#version = "0.13"

@@ -1,16 +1,37 @@
+use crate::cli::state::State;
 use crate::cli::App;
 use crate::debug::{PrintInfo, TrafficInfo};
-use crate::cli::state::{State};
+use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use tui::{
     backend::Backend,
+    gradient::BorderGradients,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, List, Paragraph, Tabs, Wrap},
     Frame,
 };
+enum NewGradient {
+    Color(Color),
+}
+
+impl From<colorgrad::Color> for NewGradient {
+    fn from(color: colorgrad::Color) -> Self {
+        let c = color.to_rgba8();
+        let new_c = Color::Rgb(c[0], c[1], c[2]);
+        NewGradient::Color(new_c)
+    }
+}
+
+impl Into<Color> for NewGradient {
+    fn into(self) -> Color {
+        match self {
+            NewGradient::Color(c) => c,
+        }
+    }
+}
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let app_title = format!(
@@ -18,6 +39,33 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         app.opts.port,
         app.opts.config.clone().to_str().unwrap()
     );
+
+    let gradient = colorgrad::CustomGradient::new()
+        .colors(&[
+            colorgrad::Color::from_rgba8(255, 255, 255, 0),
+            colorgrad::Color::from_rgba8(0, 0, app.glow_interval, 0),
+            colorgrad::Color::from_rgba8(0, 0, app.glow_interval, 0),
+            colorgrad::Color::from_rgba8(0, 0, app.glow_interval, 0),
+            colorgrad::Color::from_rgba8(255, 255, 255, 0),
+        ])
+        .build()
+        .ok();
+
+    let colors = gradient
+        .expect("where colors?")
+        .colors(f.size().width as usize)
+        .iter()
+        .map(|c| c.clone().into())
+        .collect::<Vec<NewGradient>>();
+
+    let color_vec: Vec<Color> = colors.into_iter().map(|c| c.into()).collect();
+
+    app.gradients = BorderGradients {
+        bottom: Some(color_vec.clone()),
+        top: Some(color_vec),
+        ..Default::default()
+    };
+
     let chunks = Layout::default()
         .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(f.size());
@@ -26,12 +74,12 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .tabs
         .titles
         .iter()
-        .map(|t| Spans::from(Span::styled(*t, Style::default().fg(Color::Green))))
+        .map(|t| Spans::from(Span::styled(*t, Style::default().fg(Color::White))))
         .collect();
 
     let tabs = Tabs::new(titles)
-        .block(Block::default().borders(Borders::ALL).title(app_title))
-        .highlight_style(Style::default().fg(Color::Yellow))
+        .block(Block::default().borders(Borders::TOP).title(app_title))
+        .highlight_style(Style::default().fg(Color::Blue))
         .select(app.tabs.index);
 
     let main_info = app
@@ -73,19 +121,21 @@ where
     let chunks = Layout::default()
         .constraints([Constraint::Length(4)].as_ref())
         .split(area);
-    draw_text(f, chunks[0], text);
+    draw_text(f, chunks[0], text, _app);
 }
 
-fn draw_text<B>(f: &mut Frame<B>, area: Rect, text: Vec<Spans>)
+fn draw_text<B>(f: &mut Frame<B>, area: Rect, text: Vec<Spans>, _app: &mut App)
 where
     B: Backend,
 {
-    let block = Block::default().borders(Borders::ALL).title(Span::styled(
-        "Logs",
-        Style::default()
-            .fg(Color::Magenta)
-            .add_modifier(Modifier::BOLD),
-    ));
+    let block = Block::default()
+        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT  | Borders::BOTTOM)
+        .title(Span::styled(
+            "Logs",
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        )).border_gradients(_app.gradients.clone());
 
     let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
@@ -99,7 +149,7 @@ where
     let block = Block::default().borders(Borders::ALL).title(Span::styled(
         "Toggle Rules",
         Style::default()
-            .fg(Color::Magenta)
+            .fg(Color::Blue)
             .add_modifier(Modifier::BOLD),
     ));
     let constraints = vec![Constraint::Min(5)];
@@ -134,12 +184,14 @@ where
 
     for (i, traffic_info) in response_info.iter().enumerate() {
         let title = traffic_info.to_string();
-        let block = Block::default().borders(Borders::ALL).title(Span::styled(
-            title,
-            Style::default()
-                .fg(Color::Magenta)
-                .add_modifier(Modifier::BOLD),
-        ));
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(
+                title,
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ));
         let paragraph = Paragraph::new(text[i].clone())
             .block(block)
             .wrap(Wrap { trim: true });

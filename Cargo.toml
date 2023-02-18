@@ -12,13 +12,13 @@ members = [
 ]
 
 [features]
-enablelog = ['plugin_registry/enablelog']
+logging = ['plugin_registry/logging']
+ui = []
 
 [dependencies]
 terminal_ui = { path = "./packages/terminal_ui" }
 plugin_registry = { path = "./packages/plugin_registry" }
 configuration = { path = "./packages/configuration" }
-tui = { version = "0.13", default-features = false, features = ['crossterm'] }
 tokio= { version="1.0", features=["full"] }
 hyper = { version = "0.14", features = ["full"] }
 hyper-staticfile = { version = "0.9.2" }
@@ -28,8 +28,16 @@ serde_yaml = "0.8.14"
 serde = "1.0.118"
 serde_json = "1.0.60"
 json-patch = "*"
-crossterm = "0.18"
+crossterm = "0.25"
 log4rs = "1.2.0"
 log = "0.4.17"
 futures="0.3.19"
 json_dotpath = "1.0.3"
+colorgrad = "0.6.2"
+lazy_static = "1.4.0"
+
+[dependencies.tui]
+git = "https://github.com/soultice/tui-rs.git"
+default-features = false
+features = ['crossterm']
+#version = "0.13"

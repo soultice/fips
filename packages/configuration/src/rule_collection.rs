@@ -43,7 +43,7 @@ pub struct RuleCollection {
 impl Default for RuleCollection {
     fn default() -> RuleCollection {
         RuleCollection {
-            name: Some(String::from("fallback rule if no others found")),
+            name: Some(String::from("static asset fallback rule if no others found")),
             serve_static: Some(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
             match_body_contains: None,
             match_methods: None,

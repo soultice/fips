@@ -8,8 +8,13 @@ edition = "2021"
 [dependencies]
 configuration = { path = "../configuration" }
 plugin_registry = { path = "../plugin_registry" }
-crossterm = "0.18"
-tui = { version = "0.13", default-features = false, features = ['crossterm'] }
+crossterm = "0.25"
 hyper = { version = "0.14", features = ["full"] }
 clap = { version = "3.0.0-rc.7", features = ["derive"] }
+colorgrad = "0.6.2"
 
+[dependencies.tui]
+git = "https://github.com/soultice/tui-rs.git"
+default-features = false
+features = ['crossterm']
+#version = "0.13"

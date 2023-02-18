@@ -190,8 +190,8 @@ impl<'a> From<&Configuration> for List<'a> {
                     false => Color::Reset,
                 };
                 let fg = match c.active {
-                    true => Color::Green,
-                    false => Color::Red,
+                    true => Color::Blue,
+                    false => Color::DarkGray,
                 };
                 let modifier = match c.selected {
                     true => Modifier::UNDERLINED,
