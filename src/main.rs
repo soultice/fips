@@ -78,13 +78,26 @@ pub struct PaintLogsCallbacks<'a> {
 }
 
 // spawns the hyper server on a separate thread
-fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Result<()>> {
+fn spawn_backend(
+    state: &Arc<State>,
+    configuration: &Arc<Mutex<Configuration>>,
+    plugins: &Arc<Mutex<ExternalFunctions>>,
+    addr: &SocketAddr,
+    logging: &PaintLogsCallbacks,
+) -> JoinHandle<hyper::Result<()>> {
     let capture_state = Arc::clone(state);
+    let capture_plugins = plugins.clone();
+    let capture_configuration = configuration.clone();
 
     let make_svc = make_service_fn(move |_| {
         let inner_state = Arc::clone(&capture_state);
+        let inner_plugins = capture_plugins.clone();
+        let inner_configuration = capture_configuration.clone();
+
         let responder = Box::new(move |req: Request<Body>| {
             let innermost_state = Arc::clone(&inner_state);
+            let innermost_plugins = inner_plugins.clone();
+            let innermost_configuration = inner_configuration.clone();
 
             // clone the state multiple times because the logging callbacks move the state
             // hence we need to have a copy for each callback
@@ -133,10 +146,9 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
                 }),
             };
 
-            let plugins = innermost_state_7.plugins.clone();
-            let configuration = innermost_state_7.configuration.clone();
+            let configuration = innermost_state.configuration.clone();
 
-            async move { fips::routes(req, configuration, plugins, &logging).await }
+            async move { fips::routes(req, innermost_configuration, innermost_plugins, logging).await }
         });
         let service = service_fn(responder);
 
@@ -183,17 +195,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
-        plugins,
-        configuration,
+        plugins: plugins.clone(),
+        configuration: configuration.clone(),
         traffic_info: Mutex::new(vec![]),
     });
 
+
     let mut app = App::new(true, state, opts.clone());
+
+    let logging = define_log_callbacks(app.state.clone());
 
     let addr = ([127, 0, 0, 1], opts.port).into();
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
-    let _rt_handle = spawn_backend(&app.state, &addr);
+    let _rt_handle = spawn_backend(&app.state, &configuration, &plugins, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {

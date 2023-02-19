@@ -40,11 +40,11 @@ impl SplitRequest {
 }
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
-pub async fn routes<'a>(
+pub async fn routes(
     req: Request<Body>,
     configuration: Arc<Mutex<Configuration>>,
     plugins: Arc<Mutex<ExternalFunctions>>,
-    logging: &PaintLogsCallbacks<'a>,
+    logging: PaintLogsCallbacks<'_>,
 ) -> Result<Response<Body>, hyper::Error> {
     (logging.log_incoming_request_to_fips)(&req);
 
@@ -85,7 +85,7 @@ pub async fn routes<'a>(
                     split.parts,
                     &plugins,
                     &mut first_matched_rule,
-                    logging,
+                    &logging,
                 )
                 .await
                 .unwrap();
