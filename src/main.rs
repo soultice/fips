@@ -3,9 +3,10 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
+use http::Error;
+use log::info;
 #[cfg(feature = "logging")]
 use log::LevelFilter;
-use log::info;
 #[cfg(feature = "logging")]
 use log4rs::{
     append::file::FileAppender,
@@ -17,7 +18,7 @@ use terminal_ui::debug::ResponseInfo;
 #[cfg(feature = "ui")]
 use terminal_ui::{
     cli::{options::Opts, state::State, ui, App},
-    debug::{RequestInfo, TrafficInfo, PrintInfo, FipsInfo},
+    debug::{FipsInfo, PrintInfo, RequestInfo, TrafficInfo},
     util,
 };
 
@@ -40,7 +41,7 @@ use bytes;
 use configuration::Configuration;
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Server, Response
+    Body, Request, Response, Server,
 };
 use plugin_registry::ExternalFunctions;
 use std::{
@@ -53,6 +54,7 @@ use std::{
 use tokio::runtime::Runtime;
 
 use clap::Parser;
+use std::future::Future;
 use std::net::SocketAddr;
 use tokio::task::JoinHandle;
 
@@ -72,7 +74,7 @@ pub struct PaintLogsCallbacks<'a> {
     log_incoming_response_from_server: PrintResponse<'a>,
     log_outgoing_response_to_client: PrintResponse<'a>,
     log_fips_info: PrintInfoType<'a>,
-    log_plain: PrintPlainInfo<'a>
+    log_plain: PrintPlainInfo<'a>,
 }
 
 // spawns the hyper server on a separate thread
@@ -81,63 +83,67 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
 
     let make_svc = make_service_fn(move |_| {
         let inner_state = Arc::clone(&capture_state);
-        async move {
-            Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
-                let innermost_state = Arc::clone(&inner_state);
+        let responder = Box::new(move |req: Request<Body>| {
+            let innermost_state = Arc::clone(&inner_state);
 
-                // clone the state multiple times because the logging callbacks move the state
-                // hence we need to have a copy for each callback
-                let innermost_state_1= Arc::clone(&inner_state);
-                let innermost_state_2= Arc::clone(&inner_state);
-                let innermost_state_4 = Arc::clone(&inner_state);
-                let innermost_state_3 = Arc::clone(&inner_state);
-                let innermost_state_5 = Arc::clone(&inner_state);
-                let innermost_state_6 = Arc::clone(&inner_state);
+            // clone the state multiple times because the logging callbacks move the state
+            // hence we need to have a copy for each callback
+            let innermost_state_1 = Arc::clone(&inner_state);
+            let innermost_state_2 = Arc::clone(&inner_state);
+            let innermost_state_4 = Arc::clone(&inner_state);
+            let innermost_state_3 = Arc::clone(&inner_state);
+            let innermost_state_5 = Arc::clone(&inner_state);
+            let innermost_state_6 = Arc::clone(&inner_state);
+            let innermost_state_7 = Arc::clone(&inner_state);
 
-                let logging = PaintLogsCallbacks {
-                    log_incoming_request_to_fips: Box::new(move |message: &Request<Body>| {
-                        innermost_state_1
-                            .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo::from(
-                                message,
-                            )))
-                            .unwrap_or_default();
-                    }),
-                    log_outgoing_response_to_client: Box::new(move |message: &Response<Body>| {
-                        innermost_state_2
-                            .add_traffic_info(TrafficInfo::IncomingResponse(ResponseInfo::from(
-                                message,
-                            )))
-                            .unwrap_or_default();
-                    }),
-                    log_incoming_response_from_server: Box::new(move |message: &Response<Body>| {
-                        innermost_state_3
-                            .add_traffic_info(TrafficInfo::OutgoingResponse(ResponseInfo::from(
-                                message,
-                            )))
-                            .unwrap_or_default();
-                    }),
-                    log_outgoing_request_to_server: Box::new(move |message: &Request<Body>| {
-                        innermost_state_4
-                            .add_traffic_info(TrafficInfo::OutgoingRequest(RequestInfo::from(
-                                message,
-                            )))
-                            .unwrap_or_default();
-                    }),
-                    log_fips_info: Box::new(move |message: &FipsInfo| {
-                        innermost_state_5.add_message(PrintInfo::FIPS(message.clone())).unwrap_or_default();
-                    }),
-                    log_plain: Box::new(move |message: String| {
-                        innermost_state_6.add_message(PrintInfo::PLAIN(String::from(message))).unwrap_or_default();
-                    })
-                };
+            let logging = PaintLogsCallbacks {
+                log_incoming_request_to_fips: Box::new(move |message: &Request<Body>| {
+                    innermost_state_1
+                        .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo::from(message)))
+                        .unwrap_or_default();
+                }),
+                log_outgoing_response_to_client: Box::new(move |message: &Response<Body>| {
+                    innermost_state_2
+                        .add_traffic_info(TrafficInfo::IncomingResponse(ResponseInfo::from(
+                            message,
+                        )))
+                        .unwrap_or_default();
+                }),
+                log_incoming_response_from_server: Box::new(move |message: &Response<Body>| {
+                    innermost_state_3
+                        .add_traffic_info(TrafficInfo::OutgoingResponse(ResponseInfo::from(
+                            message,
+                        )))
+                        .unwrap_or_default();
+                }),
+                log_outgoing_request_to_server: Box::new(move |message: &Request<Body>| {
+                    innermost_state_4
+                        .add_traffic_info(TrafficInfo::OutgoingRequest(RequestInfo::from(message)))
+                        .unwrap_or_default();
+                }),
+                log_fips_info: Box::new(move |message: &FipsInfo| {
+                    innermost_state_5
+                        .add_message(PrintInfo::FIPS(message.clone()))
+                        .unwrap_or_default();
+                }),
+                log_plain: Box::new(move |message: String| {
+                    innermost_state_6
+                        .add_message(PrintInfo::PLAIN(String::from(message)))
+                        .unwrap_or_default();
+                }),
+            };
 
-                async move { fips::routes(req, innermost_state, &logging).await }
-            }))
-        }
+            let plugins = innermost_state_7.plugins.clone();
+            let configuration = innermost_state_7.configuration.clone();
+
+            async move { fips::routes(req, configuration, plugins, &logging).await }
+        });
+        let service = service_fn(responder);
+
+        async move { Ok::<_, hyper::Error>(service) }
     });
 
-    let handle = tokio::spawn(Server::bind(addr).serve(make_svc));
-    handle
+    tokio::spawn(Server::bind(addr).serve(make_svc))
 }
 
 #[cfg(feature = "logging")]
@@ -170,13 +176,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let opts: Opts = Opts::parse();
 
-    let plugins = ExternalFunctions::new(&opts.plugins);
-    let configuration = Configuration::new(&opts.config).unwrap_or(Configuration::default());
+    let plugins = Arc::new(Mutex::new(ExternalFunctions::new(&opts.plugins)));
+    let configuration = Arc::new(Mutex::new(
+        Configuration::new(&opts.config).unwrap_or(Configuration::default()),
+    ));
 
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
-        plugins: Mutex::new(plugins),
-        configuration: Mutex::new(configuration),
+        plugins,
+        configuration,
         traffic_info: Mutex::new(vec![]),
     });
 

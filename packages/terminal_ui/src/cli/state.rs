@@ -2,15 +2,15 @@ use configuration::Configuration;
 use plugin_registry::ExternalFunctions;
 
 use std::{
-    sync::{Mutex},
+    sync::{Arc, Mutex},
 };
 
 use crate::debug::{PrintInfo, TrafficInfo};
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,
-    pub plugins: Mutex<ExternalFunctions>,
-    pub configuration: Mutex<Configuration>,
+    pub plugins: Arc<Mutex<ExternalFunctions>>,
+    pub configuration: Arc<Mutex<Configuration>>,
     pub traffic_info: Mutex<Vec<TrafficInfo>>,
 }
 

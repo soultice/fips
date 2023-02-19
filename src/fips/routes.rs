@@ -4,18 +4,15 @@ use super::request::handle_mode;
 
 use configuration::Configuration;
 use hyper::{
-    header::{HeaderMap, HeaderValue},
-    Body, Method, Response, StatusCode, Request,
     body::Bytes,
-    Uri,
-    http::request::Parts
+    header::{HeaderMap, HeaderValue},
+    http::request::Parts,
+    Body, Method, Request, Response, StatusCode, Uri,
 };
-use std::sync::Arc;
+use plugin_registry::ExternalFunctions;
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use terminal_ui::{
-    debug::{PrintInfo},
-    state::State,
-};
+use terminal_ui::{debug::PrintInfo};
 
 struct SplitRequest {
     uri: Uri,
@@ -43,7 +40,12 @@ impl SplitRequest {
 }
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
-pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLogsCallbacks<'a>) -> Result<Response<Body>, hyper::Error> {
+pub async fn routes<'a>(
+    req: Request<Body>,
+    configuration: Arc<Mutex<Configuration>>,
+    plugins: Arc<Mutex<ExternalFunctions>>,
+    logging: &PaintLogsCallbacks<'a>,
+) -> Result<Response<Body>, hyper::Error> {
     (logging.log_incoming_request_to_fips)(&req);
 
     let split = SplitRequest::new(req).await;
@@ -54,7 +56,7 @@ pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLo
         return Ok(preflight);
     }
 
-    let matching_rules = state.configuration.lock().unwrap().active_matching_rules(
+    let matching_rules = configuration.lock().unwrap().active_matching_rules(
         split.uri.path(),
         &split.method,
         &split.body_text,
@@ -73,8 +75,7 @@ pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLo
             (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::default())),
 
             _ => {
-                let mut first_matched_rule = state
-                    .configuration
+                let mut first_matched_rule = configuration
                     .lock()
                     .unwrap()
                     .clone_rule(matching_rules[0]);
@@ -82,7 +83,7 @@ pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLo
                 let resp: Response<Body> = handle_mode(
                     split.body_bytes,
                     split.parts,
-                    &state,
+                    &plugins,
                     &mut first_matched_rule,
                     logging,
                 )

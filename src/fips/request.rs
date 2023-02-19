@@ -13,8 +13,10 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
+
 #[cfg(feature = "ui")]
-use terminal_ui::{ state::State, debug::{FipsInfo, PrintInfo}};
+use terminal_ui::{ debug::{FipsInfo, PrintInfo}};
 
 struct Fips;
 
@@ -113,7 +115,7 @@ impl Fips {
 pub async fn handle_mode<'r>(
     body: Bytes,
     parts: Parts,
-    state: &Arc<State>,
+    plugins: &Arc<Mutex<ExternalFunctions>>,
     first_matched_rule: &mut RuleCollection,
     logging: &PaintLogsCallbacks<'r>,
 ) -> Result<Response<Body>, Box<dyn Error>> {
@@ -137,7 +139,7 @@ pub async fn handle_mode<'r>(
             )
             .await?;
 
-            first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&*plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
             Fips::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
@@ -152,7 +154,7 @@ pub async fn handle_mode<'r>(
             returned_response
         }
         Mode::MOCK => {
-            first_matched_rule.expand_rule_template(&state.plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&*plugins.lock().unwrap());
             let body = match &first_matched_rule.rules {
                 Some(rules) => match rules.len() {
                     0 => Response::new(Body::default()),
