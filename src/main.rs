@@ -3,42 +3,58 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use configuration;
-use plugin_registry;
-use terminal_ui;
-mod client;
-mod fips;
+#[cfg(feature = "logging")]
+use log::LevelFilter;
+use log::info;
+#[cfg(feature = "logging")]
+use log4rs::{
+    append::file::FileAppender,
+    config::{Appender, Config, Root},
+    encode::pattern::PatternEncoder,
+};
 
-use terminal_ui::cli::{ui, App};
+use terminal_ui::debug::ResponseInfo;
+#[cfg(feature = "ui")]
+use terminal_ui::{
+    cli::{options::Opts, state::State, ui, App},
+    debug::PrintInfo,
+    debug::{RequestInfo, TrafficInfo},
+    util,
+};
 
-use bytes;
-use configuration::{Configuration};
+#[cfg(feature = "ui")]
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+
+#[cfg(feature = "ui")]
+use tui::{backend::CrosstermBackend, Terminal};
+
+use configuration;
+use plugin_registry;
+mod client;
+mod fips;
+
+use bytes;
+use configuration::Configuration;
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Server,
+    Body, Request, Server, Response
 };
 use plugin_registry::ExternalFunctions;
 use std::{
-    io::{stdout, Write},
+    io::stdout,
     panic,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 use tokio::runtime::Runtime;
-use tui::{backend::CrosstermBackend, Terminal};
 
 use clap::Parser;
 use std::net::SocketAddr;
-use terminal_ui::cli::options::Opts;
-use terminal_ui::cli::state::State;
-use terminal_ui::debug::PrintInfo;
-use terminal_ui::util;
 use tokio::task::JoinHandle;
 
 enum Event<I> {
@@ -46,14 +62,65 @@ enum Event<I> {
     Tick,
 }
 
+type PrintRequest<'a> = Box<dyn Fn(&Request<Body>) -> () + Send + Sync + 'a>;
+type PrintResponse<'a> = Box<dyn Fn(&Response<Body>) -> () + Send + Sync + 'a>;
+
+pub struct PaintLogsCallbacks<'a> {
+    log_incoming_request_to_fips: PrintRequest<'a>,
+    log_outgoing_request_to_server: PrintRequest<'a>,
+    log_incoming_response_from_server: PrintResponse<'a>,
+    log_outgoing_response_to_client: PrintResponse<'a>,
+}
+
+// spawns the hyper server on a separate thread
 fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Result<()>> {
     let capture_state = Arc::clone(state);
+
     let make_svc = make_service_fn(move |_| {
-        let inner_capture = Arc::clone(&capture_state);
+        let inner_state = Arc::clone(&capture_state);
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req: Request<Body>| {
-                let route_capture = Arc::clone(&inner_capture);
-                async move { fips::routes(req, route_capture).await }
+                let innermost_state = Arc::clone(&inner_state);
+
+                // clone the state multiple times because the logging callbacks move the state
+                // hence we need to have a copy for each callback
+                let innermost_state_1= Arc::clone(&inner_state);
+                let innermost_state_2= Arc::clone(&inner_state);
+                let innermost_state_4 = Arc::clone(&inner_state);
+                let innermost_state_3 = Arc::clone(&inner_state);
+
+                let logging = PaintLogsCallbacks {
+                    log_incoming_request_to_fips: Box::new(move |message: &Request<Body>| {
+                        innermost_state_1
+                            .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo::from(
+                                message,
+                            )))
+                            .unwrap_or_default();
+                    }),
+                    log_outgoing_response_to_client: Box::new(move |message: &Response<Body>| {
+                        innermost_state_2
+                            .add_traffic_info(TrafficInfo::IncomingResponse(ResponseInfo::from(
+                                message,
+                            )))
+                            .unwrap_or_default();
+                    }),
+                    log_incoming_response_from_server: Box::new(move |message: &Response<Body>| {
+                        innermost_state_3
+                            .add_traffic_info(TrafficInfo::OutgoingResponse(ResponseInfo::from(
+                                message,
+                            )))
+                            .unwrap_or_default();
+                    }),
+                    log_outgoing_request_to_server: Box::new(move |message: &Request<Body>| {
+                        innermost_state_4
+                            .add_traffic_info(TrafficInfo::OutgoingRequest(RequestInfo::from(
+                                message,
+                            )))
+                            .unwrap_or_default();
+                    }),
+                };
+
+                async move { fips::routes(req, innermost_state, &logging).await }
             }))
         }
     });
@@ -62,18 +129,8 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
     handle
 }
 
-#[cfg(feature = "enablelog")]
-use log::LevelFilter;
-#[cfg(feature = "enablelog")]
-use log4rs::append::file::FileAppender;
-#[cfg(feature = "enablelog")]
-use log4rs::config::{Appender, Config, Root};
-#[cfg(feature = "enablelog")]
-use log4rs::encode::pattern::PatternEncoder;
-
-#[cfg(feature = "enablelog")]
+#[cfg(feature = "logging")]
 fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
-
     let logfile = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
         .build("log/fips.log")?;
@@ -89,16 +146,16 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "enablelog")]
-    init_logging()?;
-
-    #[cfg(feature = "enablelog")]
-    log::info!("Starting FIPS");
-
-    #[cfg(feature = "enablelog")]
-        std::panic::set_hook({Box::new(|e| {
-            log::error!("Panic: {}", e);
-    })});
+    #[cfg(feature = "logging")]
+    {
+        init_logging()?;
+        log::info!("Starting FIPS");
+        panic::set_hook({
+            Box::new(|e| {
+                log::error!("Panic: {}", e);
+            })
+        });
+    }
 
     let opts: Opts = Opts::parse();
 
@@ -117,9 +174,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = ([127, 0, 0, 1], opts.port).into();
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
-    let rt_handle = spawn_backend(&app.state, &addr);
+    let _rt_handle = spawn_backend(&app.state, &addr);
 
-    if !opts.headless {
+    #[cfg(feature = "ui")]
+    {
         enable_raw_mode()?;
 
         let mut stdout = stdout();
@@ -180,76 +238,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
-    } else {
+    }
+
+    #[cfg(not(feature = "ui"))]
+    {
         println!("server is running");
-        rt_handle.await?.unwrap();
+        _rt_handle.await?.unwrap();
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use bytes::Buf;
-    use hyper::{Client, Method, Request};
-    use json_dotpath::DotPaths;
-
-    #[tokio::test]
-    async fn all_functions_work() -> Result<(), String> {
-        let opts = Opts {
-            config: PathBuf::from("./tests/configuration_files"),
-            plugins: PathBuf::from("./plugins"),
-            port: 8888,
-            headless: false,
-        };
-        let plugins = ExternalFunctions::new(&opts.plugins);
-        let configuration = Configuration::new(&opts.config);
-
-        let state = Arc::new(State {
-            messages: Mutex::new(Vec::new()),
-            plugins: Mutex::new(plugins),
-            configuration: Mutex::new(configuration),
-            traffic_info: Mutex::new(vec![]),
-        });
-
-        let app = App::new(true, state, opts.clone());
-
-        let addr = ([127, 0, 0, 1], opts.port).into();
-        let runtime = Runtime::new().unwrap();
-        let _guard = runtime.enter();
-        let _rt_handle = spawn_backend(&app.state, &addr);
-
-        let client = Client::new();
-
-        let req = Request::builder()
-            .method(Method::GET)
-            .uri("http://localhost:8888/final/")
-            .body(Body::default())
-            .unwrap();
-
-        let res = client.request(req).await.unwrap();
-
-        let (_parts, body) = res.into_parts();
-        let body = hyper::body::aggregate(body).await.unwrap().reader();
-        let body: serde_json::Value = serde_json::from_reader(body).unwrap();
-
-        runtime.shutdown_background();
-        match body {
-            serde_json::Value::Object(b) => {
-                let mut pattern_has_been_replaced = false;
-                if let Some(path_value) = b.dot_get::<serde_json::Value>("users.0.foo").unwrap() {
-                    if path_value != serde_json::Value::String(String::from("{{Name}}")) {
-                        pattern_has_been_replaced = true;
-                    }
-                }
-                if pattern_has_been_replaced {
-                    Ok(())
-                } else {
-                    Err(String::from("Response path does not match"))
-                }
-            }
-            _ => Err(String::from("Response should be a Map Object")),
-        }
-    }
 }

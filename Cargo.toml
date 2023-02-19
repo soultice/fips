@@ -13,10 +13,11 @@ members = [
 
 [features]
 logging = ['plugin_registry/logging']
-ui = []
+ui = ['dep:terminal_ui']
+default = ['ui']
 
 [dependencies]
-terminal_ui = { path = "./packages/terminal_ui" }
+terminal_ui = { path = "./packages/terminal_ui", optional=true }
 plugin_registry = { path = "./packages/plugin_registry" }
 configuration = { path = "./packages/configuration" }
 tokio= { version="1.0", features=["full"] }
@@ -35,6 +36,7 @@ futures="0.3.19"
 json_dotpath = "1.0.3"
 colorgrad = "0.6.2"
 lazy_static = "1.4.0"
+http = "0.2.6"
 
 [dependencies.tui]
 git = "https://github.com/soultice/tui-rs.git"

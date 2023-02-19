@@ -1,35 +1,63 @@
+use crate::PaintLogsCallbacks;
+
 use super::request::handle_mode;
-use hyper::header::{HeaderMap, HeaderValue};
-use hyper::{Body, Method, Request, Response, StatusCode};
+
+use hyper::{
+    header::{HeaderMap, HeaderValue},
+    Body, Method, Response, StatusCode, Request,
+    body::Bytes,
+    Uri,
+    http::request::Parts
+};
 use std::sync::Arc;
-use terminal_ui::debug::{PrintInfo, RequestInfo, ResponseInfo, TrafficInfo};
-use terminal_ui::state::State;
 
-pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Body>, hyper::Error> {
-    let req_info = RequestInfo::from(&req);
+use terminal_ui::{
+    debug::{PrintInfo},
+    state::State,
+};
 
-    state
-        .add_traffic_info(TrafficInfo::IncomingRequest(req_info))
-        .unwrap_or_default();
+struct SplitRequest {
+    uri: Uri,
+    method: Method,
+    body_text: String,
+    body_bytes: Bytes,
+    parts: Parts,
+}
 
-    let uri = req.uri().clone();
-    let method = req.method().clone();
-    let (parts, body) = req.into_parts();
-    let body_bytes = hyper::body::to_bytes(body).await?;
-    let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
+impl SplitRequest {
+    async fn new(req: Request<Body>) -> Self {
+        let (parts, body) = req.into_parts();
+        let uri = parts.uri.clone();
+        let method = parts.method.clone();
+        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
+        SplitRequest {
+            uri,
+            method,
+            body_text,
+            body_bytes,
+            parts,
+        }
+    }
+}
 
-    if method == Method::OPTIONS {
+// this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
+pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLogsCallbacks<'a>) -> Result<Response<Body>, hyper::Error> {
+    (logging.log_incoming_request_to_fips)(&req);
+
+    let split = SplitRequest::new(req).await;
+
+    if split.method == Method::OPTIONS {
         let mut preflight = Response::new(Body::default());
         add_cors_headers(preflight.headers_mut());
         return Ok(preflight);
     }
 
-    let matching_rules =
-        state
-            .configuration
-            .lock()
-            .unwrap()
-            .active_matching_rules(uri.path(), &method, &body_text);
+    let matching_rules = state.configuration.lock().unwrap().active_matching_rules(
+        split.uri.path(),
+        &split.method,
+        &split.body_text,
+    );
 
     match matching_rules.len() {
         0 => {
@@ -39,13 +67,13 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
             state
                 .add_message(PrintInfo::PLAIN(format!(
                     "No matching rule found for URI: {}",
-                    &uri
+                    &split.uri
                 )))
                 .unwrap_or_default();
             Ok(no_matching_rule)
         }
 
-        _ => match (&method, uri.path()) {
+        _ => match (&split.method, split.uri.path()) {
             (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::default())),
 
             _ => {
@@ -55,16 +83,17 @@ pub async fn routes(req: Request<Body>, state: Arc<State>) -> Result<Response<Bo
                     .unwrap()
                     .clone_rule(matching_rules[0]);
 
-                let resp: Response<Body> =
-                    handle_mode(body_bytes, parts, &state, &mut first_matched_rule)
-                        .await
-                        .unwrap();
+                let resp: Response<Body> = handle_mode(
+                    split.body_bytes,
+                    split.parts,
+                    &state,
+                    &mut first_matched_rule,
+                    logging,
+                )
+                .await
+                .unwrap();
 
-                let response_info = ResponseInfo::from(&resp);
-
-                state
-                    .add_traffic_info(TrafficInfo::OutgoingResponse(response_info))
-                    .unwrap_or_default();
+                (logging.log_outgoing_response_to_client)(&resp);
 
                 if let Some(sleep) = first_matched_rule.sleep {
                     tokio::time::sleep(tokio::time::Duration::from_millis(sleep)).await;

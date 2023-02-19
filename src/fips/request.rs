@@ -1,3 +1,4 @@
+use crate::PaintLogsCallbacks;
 use crate::client::AppClient;
 use crate::configuration::{Mode, Rule, RuleCollection};
 use hyper::body::Bytes;
@@ -11,19 +12,19 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
-use terminal_ui::debug::{FipsInfo, PrintInfo};
-use terminal_ui::state::State;
+#[cfg(feature = "ui")]
+use terminal_ui::{ state::State, debug::{FipsInfo, PrintInfo}};
 
 struct Fips;
 
 impl Fips {
-    pub async fn forward_request(
+    pub async fn forward_request<'a>(
         uri: &Uri,
         method: &Method,
         headers: Option<Vec<String>>,
         body: Bytes,
         parts: &Parts,
-        state: &Arc<State>,
+        logging: &PaintLogsCallbacks<'a>,
     ) -> Result<(hyper::http::response::Parts, Value), Box<dyn Error>> {
         let mut client = AppClient {
             uri,
@@ -33,7 +34,7 @@ impl Fips {
             parts,
         };
 
-        Ok(client.response(state).await?)
+        Ok(client.response(logging).await?)
     }
 
     pub fn set_status(
@@ -113,6 +114,7 @@ pub async fn handle_mode<'r>(
     parts: Parts,
     state: &Arc<State>,
     first_matched_rule: &mut RuleCollection,
+    logging: &PaintLogsCallbacks<'r>,
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let method = &parts.method;
     let uri = &parts.uri;
@@ -130,7 +132,7 @@ pub async fn handle_mode<'r>(
                 first_matched_rule.forward_headers.clone(),
                 body,
                 &parts,
-                state,
+                logging,
             )
             .await?;
 
@@ -183,6 +185,8 @@ pub async fn handle_mode<'r>(
     // Add or change response status
 
     let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
+
+    #[cfg(feature = "ui")]
     state
         .add_message(PrintInfo::FIPS(FipsInfo {
             method: method.to_string(),

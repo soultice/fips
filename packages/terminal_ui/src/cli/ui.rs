@@ -4,6 +4,7 @@ use crate::debug::{PrintInfo, TrafficInfo};
 use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tui::{
     backend::Backend,
     gradient::BorderGradients,
@@ -13,25 +14,8 @@ use tui::{
     widgets::{Block, Borders, List, Paragraph, Tabs, Wrap},
     Frame,
 };
-enum NewGradient {
-    Color(Color),
-}
-
-impl From<colorgrad::Color> for NewGradient {
-    fn from(color: colorgrad::Color) -> Self {
-        let c = color.to_rgba8();
-        let new_c = Color::Rgb(c[0], c[1], c[2]);
-        NewGradient::Color(new_c)
-    }
-}
-
-impl Into<Color> for NewGradient {
-    fn into(self) -> Color {
-        match self {
-            NewGradient::Color(c) => c,
-        }
-    }
-}
+use super::config_newtype::ConfigurationNewtype;
+use super::gradient_newtype::NewGradient;
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let app_title = format!(
@@ -129,13 +113,14 @@ where
     B: Backend,
 {
     let block = Block::default()
-        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT  | Borders::BOTTOM)
+        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT | Borders::BOTTOM)
         .title(Span::styled(
             "Logs",
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
-        )).border_gradients(_app.gradients.clone());
+        ))
+        .border_gradients(_app.gradients.clone());
 
     let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
 
@@ -157,7 +142,8 @@ where
         .constraints(constraints.as_ref())
         .split(area);
 
-    let list = List::from(&state.configuration.lock().unwrap().clone()).block(block);
+    let wrapper = ConfigurationNewtype(&state.configuration);
+    let list = List::from(wrapper).block(block);
 
     f.render_widget(list, chunks[0])
 }
@@ -184,14 +170,12 @@ where
 
     for (i, traffic_info) in response_info.iter().enumerate() {
         let title = traffic_info.to_string();
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(Span::styled(
-                title,
-                Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::BOLD),
-            ));
+        let block = Block::default().borders(Borders::ALL).title(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ));
         let paragraph = Paragraph::new(text[i].clone())
             .block(block)
             .wrap(Wrap { trim: true });

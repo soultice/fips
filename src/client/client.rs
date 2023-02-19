@@ -1,11 +1,9 @@
 use crate::bytes::Buf;
-use terminal_ui::debug::{RequestInfo, ResponseInfo, TrafficInfo};
-use terminal_ui::state::State;
 use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
-use std::str::FromStr;
-use std::sync::Arc;
 use std::error::Error;
+use std::str::FromStr;
+use crate::PaintLogsCallbacks;
 
 #[derive(Debug)]
 pub struct AppClient<'a> {
@@ -19,7 +17,7 @@ pub struct AppClient<'a> {
 impl<'a> AppClient<'a> {
     pub async fn response(
         &mut self,
-        state: &Arc<State>,
+        logging: &PaintLogsCallbacks<'a>,
     ) -> Result<(Parts, serde_json::Value), Box<dyn Error>> {
         let client = Client::new();
         let body = Body::from(self.body.clone());
@@ -40,17 +38,11 @@ impl<'a> AppClient<'a> {
             }
         }
 
-        let outgoing_request_info = RequestInfo::from(&client_req);
-        state
-            .add_traffic_info(TrafficInfo::OutgoingRequest(outgoing_request_info))
-            .unwrap_or_default();
+        (logging.log_outgoing_request_to_server)(&client_req);
 
         let client_res = client.request(client_req).await?;
 
-        let incoming_response_info = ResponseInfo::from(&client_res);
-        state
-            .add_traffic_info(TrafficInfo::IncomingResponse(incoming_response_info))
-            .unwrap_or_default();
+        (logging.log_incoming_response_from_server)(&client_res);
 
         let (mut client_parts, client_body) = client_res.into_parts();
 

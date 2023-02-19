@@ -15,9 +15,3 @@ rand = "0.7"
 hyper = { version = "0.14", features = ["full"] }
 strum_macros = "0.20"
 lazy_static = "1.4.0"
-
-[dependencies.tui]
-git = "https://github.com/soultice/tui-rs.git"
-default-features = false
-features = ['crossterm']
-#version = "0.13"

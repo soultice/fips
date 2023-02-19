@@ -7,9 +7,6 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{error, fs, io};
-use tui::style::{Color, Modifier, Style};
-use tui::text::Spans;
-use tui::widgets::{List, ListItem};
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -170,36 +167,3 @@ impl Configuration {
     }
 }
 
-impl<'a> From<&Configuration> for List<'a> {
-    fn from(configuration: &Configuration) -> List<'a> {
-        let items: Vec<ListItem> = configuration
-            .rule_collection
-            .iter()
-            .map(|c| {
-                let mut lines: Vec<Spans> = vec![];
-                if let Some(rule_name) = c.name.clone() {
-                    lines.extend(vec![Spans::from(format!(
-                        "name: {} --- path: {}",
-                        rule_name, c.path
-                    ))]);
-                } else {
-                    lines.extend(vec![Spans::from(format!("path: {}", c.path.clone()))]);
-                }
-                let bg = match c.selected {
-                    true => Color::Reset,
-                    false => Color::Reset,
-                };
-                let fg = match c.active {
-                    true => Color::Blue,
-                    false => Color::DarkGray,
-                };
-                let modifier = match c.selected {
-                    true => Modifier::UNDERLINED,
-                    false => Modifier::DIM,
-                };
-                ListItem::new(lines).style(Style::default().fg(fg).bg(bg).add_modifier(modifier))
-            })
-            .collect();
-        List::new(items).style(Style::default())
-    }
-}

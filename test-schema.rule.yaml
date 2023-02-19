@@ -1,0 +1,10 @@
+---
+- forwardUri: http://www.google.com
+  name: Google
+- forwardUri: http://www.google.com
+  name: Google
+  foobar: barfoo
+- forwardUri: http://www.google.com
+  name: Google
+  foobar: barfoo
+

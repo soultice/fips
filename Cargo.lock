@@ -145,7 +145,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "strum_macros",
- "tui",
 ]
 
 [[package]]
@@ -209,6 +208,7 @@ dependencies = [
  "configuration",
  "crossterm",
  "futures",
+ "http",
  "hyper",
  "hyper-staticfile",
  "json-patch",
