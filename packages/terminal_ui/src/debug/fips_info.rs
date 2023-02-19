@@ -1,5 +1,6 @@
 use tui::text::{Span, Spans};
 
+#[derive(Clone)]
 pub struct FipsInfo {
     pub method: String,
     pub path: String,

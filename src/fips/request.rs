@@ -7,6 +7,7 @@ use hyper::http::header::HeaderName;
 use hyper::http::request::Parts;
 use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
+use plugin_registry::ExternalFunctions;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
@@ -186,17 +187,15 @@ pub async fn handle_mode<'r>(
 
     let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
 
-    #[cfg(feature = "ui")]
-    state
-        .add_message(PrintInfo::FIPS(FipsInfo {
+    let info = FipsInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),
             matching_rules: 1,
             name,
             response_code: returned_response.status().to_string(),
-        }))
-        .unwrap_or_default();
+    };
+    (logging.log_fips_info)(&info);
 
     returned_response
         .headers_mut()

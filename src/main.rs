@@ -17,8 +17,7 @@ use terminal_ui::debug::ResponseInfo;
 #[cfg(feature = "ui")]
 use terminal_ui::{
     cli::{options::Opts, state::State, ui, App},
-    debug::PrintInfo,
-    debug::{RequestInfo, TrafficInfo},
+    debug::{RequestInfo, TrafficInfo, PrintInfo, FipsInfo},
     util,
 };
 
@@ -64,12 +63,16 @@ enum Event<I> {
 
 type PrintRequest<'a> = Box<dyn Fn(&Request<Body>) -> () + Send + Sync + 'a>;
 type PrintResponse<'a> = Box<dyn Fn(&Response<Body>) -> () + Send + Sync + 'a>;
+type PrintPlainInfo<'a> = Box<dyn Fn(String) -> () + Send + Sync + 'a>;
+type PrintInfoType<'a> = Box<dyn Fn(&FipsInfo) -> () + Send + Sync + 'a>;
 
 pub struct PaintLogsCallbacks<'a> {
     log_incoming_request_to_fips: PrintRequest<'a>,
     log_outgoing_request_to_server: PrintRequest<'a>,
     log_incoming_response_from_server: PrintResponse<'a>,
     log_outgoing_response_to_client: PrintResponse<'a>,
+    log_fips_info: PrintInfoType<'a>,
+    log_plain: PrintPlainInfo<'a>
 }
 
 // spawns the hyper server on a separate thread
@@ -88,6 +91,8 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
                 let innermost_state_2= Arc::clone(&inner_state);
                 let innermost_state_4 = Arc::clone(&inner_state);
                 let innermost_state_3 = Arc::clone(&inner_state);
+                let innermost_state_5 = Arc::clone(&inner_state);
+                let innermost_state_6 = Arc::clone(&inner_state);
 
                 let logging = PaintLogsCallbacks {
                     log_incoming_request_to_fips: Box::new(move |message: &Request<Body>| {
@@ -118,6 +123,12 @@ fn spawn_backend(state: &Arc<State>, addr: &SocketAddr) -> JoinHandle<hyper::Res
                             )))
                             .unwrap_or_default();
                     }),
+                    log_fips_info: Box::new(move |message: &FipsInfo| {
+                        innermost_state_5.add_message(PrintInfo::FIPS(message.clone())).unwrap_or_default();
+                    }),
+                    log_plain: Box::new(move |message: String| {
+                        innermost_state_6.add_message(PrintInfo::PLAIN(String::from(message))).unwrap_or_default();
+                    })
                 };
 
                 async move { fips::routes(req, innermost_state, &logging).await }

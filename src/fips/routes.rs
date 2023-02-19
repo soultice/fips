@@ -2,6 +2,7 @@ use crate::PaintLogsCallbacks;
 
 use super::request::handle_mode;
 
+use configuration::Configuration;
 use hyper::{
     header::{HeaderMap, HeaderValue},
     Body, Method, Response, StatusCode, Request,
@@ -64,12 +65,7 @@ pub async fn routes<'a>(req: Request<Body>, state: Arc<State>, logging: &PaintLo
             let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
             *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
             add_cors_headers(no_matching_rule.headers_mut());
-            state
-                .add_message(PrintInfo::PLAIN(format!(
-                    "No matching rule found for URI: {}",
-                    &split.uri
-                )))
-                .unwrap_or_default();
+            (logging.log_plain)(format!("No matching rule found for URI: {}", &split.uri));
             Ok(no_matching_rule)
         }
 
