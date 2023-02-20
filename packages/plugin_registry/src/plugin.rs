@@ -100,7 +100,7 @@ impl ExternalFunctions {
 
         unsafe {
             for path in entries.iter() {
-                self.load(&path).expect("Function loading failed");
+                self.load(path).expect("Function loading failed");
             }
         }
         Ok(())
@@ -109,7 +109,7 @@ impl ExternalFunctions {
     pub fn call(&self, function: &str, arguments: Vec<Value>) -> Result<String, InvocationError> {
         self.functions
             .get(function)
-            .ok_or_else(|| format!("\"{}\" not found", function))?
+            .ok_or_else(|| format!("\"{function}\" not found"))?
             .call(arguments)
     }
 

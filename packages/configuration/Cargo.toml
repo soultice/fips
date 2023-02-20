@@ -8,10 +8,13 @@ edition = "2021"
 [dependencies]
 plugin_registry = { path = "../plugin_registry" }
 serde_yaml = "0.8.14"
-serde = "1.0.118"
 serde_json = "1.0.60"
 regex = "1.4.2"
 rand = "0.7"
 hyper = { version = "0.14", features = ["full"] }
 strum_macros = "0.20"
 lazy_static = "1.4.0"
+
+[dependencies.serde]
+version = "1.0.118"
+features = ["derive"]

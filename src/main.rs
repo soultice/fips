@@ -3,7 +3,7 @@ use std::{alloc::System, collections::HashMap};
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use http::Error;
+
 use log::info;
 #[cfg(feature = "logging")]
 use log::LevelFilter;
@@ -17,7 +17,7 @@ use log4rs::{
 #[cfg(feature = "ui")]
 use terminal_ui::{
     cli::{state::State, ui, App},
-    debug::{FipsInfo, PrintInfo, RequestInfo, TrafficInfo, ResponseInfo},
+    debug::{PrintInfo, RequestInfo, TrafficInfo},
     util,
 };
 
@@ -31,16 +31,13 @@ use crossterm::{
 #[cfg(feature = "ui")]
 use tui::{backend::CrosstermBackend, Terminal};
 
-use configuration;
-use plugin_registry;
 mod client;
 mod fips;
 
-use bytes;
 use configuration::Configuration;
 use hyper::{
     service::{make_service_fn, service_fn},
-    Body, Request, Response, Server,
+    Body, Request, Server,
 };
 use plugin_registry::ExternalFunctions;
 use std::{
@@ -53,7 +50,7 @@ use std::{
 use tokio::runtime::Runtime;
 
 use clap::Parser;
-use std::future::Future;
+
 use std::net::SocketAddr;
 use tokio::task::JoinHandle;
 use utility::{ log::Loggable, options::Opts };
@@ -63,7 +60,7 @@ enum Event<I> {
     Tick,
 }
 
-type LogFunction = Box<dyn Fn(&Loggable) -> () + Send + Sync>;
+type LogFunction = Box<dyn Fn(&Loggable) + Send + Sync>;
 
 pub struct PaintLogsCallbacks(LogFunction);
 
@@ -166,7 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Configuration::new(&opts.config).unwrap_or(Configuration::default()),
     ));
 
-    let (state, app, logging) = {
+    let (_state, app, logging) = {
         #[cfg(feature = "ui")]
         let (state, app, logging) = {
             let state = Arc::new(State {

@@ -13,8 +13,8 @@ impl From<colorgrad::Color> for NewGradient {
     }
 }
 
-impl Into<Color> for NewGradient {
-    fn into(self) -> Color {
-        self.0
+impl From<NewGradient> for Color {
+    fn from(val: NewGradient) -> Self {
+        val.0
     }
 }

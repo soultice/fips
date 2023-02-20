@@ -58,13 +58,11 @@ impl<'a> App<'a> {
                 self.direction = Dir::Substract;
                 self.glow_interval = 250;
             }
+        } else if let Some(s) = self.glow_interval.checked_sub(5) {
+            self.glow_interval = s;
         } else {
-            if let Some(s) = self.glow_interval.checked_sub(5) {
-                self.glow_interval = s;
-            } else {
-                self.direction = Dir::Add;
-                self.glow_interval = 0;
-            }
+            self.direction = Dir::Add;
+            self.glow_interval = 0;
         }
 
         Ok(())

@@ -10,9 +10,9 @@ use hyper::{
     Body, Method, Request, Response, StatusCode, Uri,
 };
 use plugin_registry::ExternalFunctions;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
-use terminal_ui::{debug::PrintInfo};
+
 use utility::log::{Loggable, LoggableType};
 
 impl From<&SplitRequest> for Loggable {
@@ -100,7 +100,7 @@ pub async fn routes(
                     split.parts,
                     &plugins,
                     &mut first_matched_rule,
-                    &logging,
+                    logging,
                 )
                 .await
                 .unwrap();

@@ -43,8 +43,12 @@ pub struct RuleCollection {
 impl Default for RuleCollection {
     fn default() -> RuleCollection {
         RuleCollection {
-            name: Some(String::from("static asset fallback rule if no others found")),
-            serve_static: Some(String::from(std::env::current_dir().unwrap().to_str().unwrap())),
+            name: Some(String::from(
+                "static asset fallback rule if no others found",
+            )),
+            serve_static: Some(String::from(
+                std::env::current_dir().unwrap().to_str().unwrap(),
+            )),
             match_body_contains: None,
             match_methods: None,
             match_with_prob: None,
@@ -63,14 +67,11 @@ impl Default for RuleCollection {
 }
 
 impl RuleCollection {
-    pub fn expand_rule_template(&mut self, plugins: &ExternalFunctions) -> () {
+    pub fn expand_rule_template(&mut self, plugins: &ExternalFunctions) {
         if let Some(rules) = &mut self.rules {
             for rule in rules {
-                match &mut rule.item {
-                    Some(item) => {
-                        recursive_expand(item, plugins);
-                    }
-                    _ => {}
+                if let Some(item) = &mut rule.item {
+                    recursive_expand(item, plugins);
                 }
             }
         }
@@ -89,7 +90,7 @@ impl RuleCollection {
     pub fn forward_url(&self, uri: &Uri) -> Uri {
         let mut url_path = String::from("");
         if let Some(forward_url) = &self.forward_uri.clone() {
-            url_path.push_str(&forward_url);
+            url_path.push_str(forward_url);
         }
         url_path.push_str(&uri.to_string());
         Uri::from_str(&url_path).ok().unwrap()
@@ -98,19 +99,17 @@ impl RuleCollection {
 
 fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) {
     match value {
-        serde_json::Value::String(val) => match val.as_str() {
-            _ => {
-                if plugins.has(val) {
-                    let result = plugins.call(&val, vec![]).expect("Invocation failed");
-                    let try_serialize = serde_json::from_str(&result);
-                    if let Ok(i) = try_serialize {
-                        *value = i;
-                    } else {
-                        *value = serde_json::Value::String(result);
-                    }
+        serde_json::Value::String(val) => {
+            if plugins.has(val) {
+                let result = plugins.call(val, vec![]).expect("Invocation failed");
+                let try_serialize = serde_json::from_str(&result);
+                if let Ok(i) = try_serialize {
+                    *value = i;
+                } else {
+                    *value = serde_json::Value::String(result);
                 }
             }
-        },
+        }
         serde_json::Value::Array(val) => {
             for i in val {
                 recursive_expand(i, plugins);
@@ -121,23 +120,20 @@ fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) 
             let args = val.get("args");
             match (plugin, args) {
                 (Some(p), Some(a)) => {
-                    match (p, a) {
-                        (
-                            serde_json::Value::String(function),
-                            serde_json::Value::Array(arguments),
-                        ) => {
-                            let result = plugins
-                                .call(function, arguments.clone())
-                                .expect("Invocation failed");
-                            let try_serialize = serde_json::from_str(&result);
-                            if let Ok(i) = try_serialize {
-                                *value = i;
-                            } else {
-                                *value = serde_json::Value::String(result);
-                            }
+                    if let (
+                        serde_json::Value::String(function),
+                        serde_json::Value::Array(arguments),
+                    ) = (p, a)
+                    {
+                        let result = plugins
+                            .call(function, arguments.clone())
+                            .expect("Invocation failed");
+                        let try_serialize = serde_json::from_str(&result);
+                        if let Ok(i) = try_serialize {
+                            *value = i;
+                        } else {
+                            *value = serde_json::Value::String(result);
                         }
-                        // wrong format of plugin & args combo
-                        _ => {}
                     }
                 }
                 _ => {

@@ -4,7 +4,6 @@ use crate::debug::{PrintInfo, TrafficInfo};
 use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::sync::Mutex;
 use tui::{
     backend::Backend,
     gradient::BorderGradients,
@@ -156,7 +155,7 @@ where
 
     let text: Vec<Text> = response_info
         .iter()
-        .map(|traffic_info| Text::from(traffic_info))
+        .map(Text::from)
         .collect();
 
     let constraints: Vec<Constraint> = text

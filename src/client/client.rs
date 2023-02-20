@@ -1,4 +1,4 @@
-use crate::bytes::Buf;
+use hyper::body::Buf;
 use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::error::Error;
@@ -17,7 +17,7 @@ pub struct AppClient<'a> {
 impl<'a> AppClient<'a> {
     pub async fn response(
         &mut self,
-        logging: &PaintLogsCallbacks,
+        _logging: &PaintLogsCallbacks,
     ) -> Result<(Parts, serde_json::Value), Box<dyn Error>> {
         let client = Client::new();
         let body = Body::from(self.body.clone());
@@ -30,7 +30,7 @@ impl<'a> AppClient<'a> {
 
         if let Some(headers) = &self.headers {
             for header_name in headers {
-                let header = HeaderName::from_str(&header_name)?;
+                let header = HeaderName::from_str(header_name)?;
                 let header_value = self.parts.headers.get(header_name);
                 if let Some(hv) = header_value {
                     client_req.headers_mut().insert(header, hv.clone());

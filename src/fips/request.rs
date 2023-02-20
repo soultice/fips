@@ -1,6 +1,6 @@
 use crate::PaintLogsCallbacks;
 use crate::client::AppClient;
-use crate::configuration::{Mode, Rule, RuleCollection};
+use configuration::{Mode, Rule, RuleCollection};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
@@ -34,7 +34,7 @@ impl Fips {
             parts,
         };
 
-        Ok(client.response(logging).await?)
+        client.response(logging).await
     }
 
     pub fn set_status(
@@ -56,7 +56,7 @@ impl Fips {
             for rule in rules {
                 match &rule.path {
                     Some(path) => {
-                        resp_json.dot_set(&path, rule.item.clone())?;
+                        resp_json.dot_set(path, rule.item.clone())?;
                     }
                     None => {
                         resp_json.dot_set("", rule.item.clone())?;
@@ -74,7 +74,7 @@ impl Fips {
         if let Some(backward_headers) = backwards_headers {
             let mut header_buffer: Vec<(HeaderName, HeaderValue)> = Vec::new();
             for header_name in backward_headers {
-                let header = HeaderName::from_str(&header_name)?;
+                let header = HeaderName::from_str(header_name)?;
                 let header_value = returned_response
                     .headers()
                     .get(header_name)
@@ -124,7 +124,7 @@ pub async fn handle_mode(
 
     let mut returned_response = match mode {
         Mode::PROXY | Mode::FIPS => {
-            let uri = &first_matched_rule.forward_url(&uri);
+            let uri = &first_matched_rule.forward_url(uri);
 
             let (client_parts, mut resp_json) = Fips::forward_request(
                 uri,
@@ -136,22 +136,21 @@ pub async fn handle_mode(
             )
             .await?;
 
-            first_matched_rule.expand_rule_template(&*plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
             Fips::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
 
             let final_response_string = serde_json::to_string(&resp_json)?;
-            let returned_response = match final_response_string {
+            match final_response_string {
                 s if s.is_empty() => {
-                    Response::from_parts(client_parts, Body::from(Body::default()))
+                    Response::from_parts(client_parts, Body::default())
                 }
-                s => Response::from_parts(client_parts, Body::from(s.clone())),
-            };
-            returned_response
+                s => Response::from_parts(client_parts, Body::from(s)),
+            }
         }
         Mode::MOCK => {
-            first_matched_rule.expand_rule_template(&*plugins.lock().unwrap());
+            first_matched_rule.expand_rule_template(&plugins.lock().unwrap());
             let body = match &first_matched_rule.rules {
                 Some(rules) => match rules.len() {
                     0 => Response::new(Body::default()),
@@ -170,10 +169,9 @@ pub async fn handle_mode(
                 &parts.uri.to_string(),
             )
             .await?;
-            let response = hyper_staticfile::ResponseBuilder::new()
+            hyper_staticfile::ResponseBuilder::new()
                 .request_parts(method, uri, headers)
-                .build(result)?;
-            response
+                .build(result)?
         }
     };
 
@@ -184,7 +182,7 @@ pub async fn handle_mode(
     Fips::set_status(&first_matched_rule.response_status, &mut returned_response)?;
     // Add or change response status
 
-    let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
+    let _name = first_matched_rule.name.clone().unwrap_or(String::from(""));
 
 /*     let info = FipsInfo {
             method: method.to_string(),

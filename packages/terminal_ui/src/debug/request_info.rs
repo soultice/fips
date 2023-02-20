@@ -14,15 +14,15 @@ pub struct RequestInfo {
 impl<'a> From<&RequestInfo> for Text<'a> {
     fn from(request_info: &RequestInfo) -> Text<'a> {
         let mut text = String::from(&request_info.method);
-        text.push_str(" ");
+        text.push(' ');
         text.push_str(&request_info.uri);
-        text.push_str(" ");
+        text.push(' ');
         text.push_str(&request_info.version);
         for (k, v) in &request_info.headers {
             text += "\n";
-            text += &k;
+            text += k;
             text += " : ";
-            text += &v;
+            text += v;
         }
         Text::from(text)
     }
@@ -31,8 +31,8 @@ impl<'a> From<&RequestInfo> for Text<'a> {
 impl From<&Request<Body>> for RequestInfo {
     fn from(request: &Request<Body>) -> RequestInfo {
         let method = String::from(request.method().clone().as_str());
-        let uri = String::from(request.uri().clone().to_string());
-        let version = String::from(format!("{:?}", request.version().clone()));
+        let uri = request.uri().clone().to_string();
+        let version = format!("{:?}", request.version().clone());
         let mut headers = HashMap::new();
         for (k, v) in request.headers() {
             headers.insert(

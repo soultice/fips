@@ -19,7 +19,7 @@ impl fmt::Display for TrafficInfo {
             TrafficInfo::OutgoingRequest(_) => "Outgoing Request",
             TrafficInfo::IncomingRequest(_) => "Incoming Request",
         };
-        write!(f, "{}", info_string)
+        write!(f, "{info_string}")
     }
 }
 
