@@ -15,9 +15,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[cfg(feature = "ui")]
-use terminal_ui::{ debug::{FipsInfo, PrintInfo}};
-
 struct Fips;
 
 impl Fips {
@@ -189,15 +186,15 @@ pub async fn handle_mode(
 
     let name = first_matched_rule.name.clone().unwrap_or(String::from(""));
 
-    let info = FipsInfo {
+/*     let info = FipsInfo {
             method: method.to_string(),
             path: uri.to_string(),
             mode: mode.to_string(),
             matching_rules: 1,
             name,
             response_code: returned_response.status().to_string(),
-    };
-    (logging.log_fips_info)(&info);
+    }; */
+    // (logging.log_fips_info)(&info);
 
     returned_response
         .headers_mut()

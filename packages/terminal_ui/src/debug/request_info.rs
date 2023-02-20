@@ -5,10 +5,10 @@ use tui::text::Text;
 #[derive(Debug, Clone)]
 pub struct RequestInfo {
     pub request_type: String,
-    method: String,
-    uri: String,
-    version: String,
-    headers: HashMap<String, String>,
+    pub method: String,
+    pub uri: String,
+    pub version: String,
+    pub headers: HashMap<String, String>,
 }
 
 impl<'a> From<&RequestInfo> for Text<'a> {

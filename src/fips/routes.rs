@@ -13,6 +13,19 @@ use plugin_registry::ExternalFunctions;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use terminal_ui::{debug::PrintInfo};
+use utility::log::{Loggable, LoggableType};
+
+impl From<&SplitRequest> for Loggable {
+    fn from(req: &SplitRequest) -> Self {
+        Loggable {
+            message_type: LoggableType::IncomingRequestAtFfips,
+            message: format!(
+                "Incoming request at FIPS: {} {}",
+                req.method, req.uri
+            ),
+        }
+    }
+}
 
 struct SplitRequest {
     uri: Uri,
@@ -46,9 +59,11 @@ pub async fn routes(
     plugins: Arc<Mutex<ExternalFunctions>>,
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>, hyper::Error> {
-    (logging.log_incoming_request_to_fips)(&req);
 
     let split = SplitRequest::new(req).await;
+
+    let loggable = Loggable::from(&split);
+    (logging.0)(&loggable);
 
     if split.method == Method::OPTIONS {
         let mut preflight = Response::new(Body::default());
@@ -67,7 +82,7 @@ pub async fn routes(
             let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
             *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
             add_cors_headers(no_matching_rule.headers_mut());
-            (logging.log_plain)(format!("No matching rule found for URI: {}", &split.uri));
+            //(logging.log_plain)(format!("No matching rule found for URI: {}", &split.uri));
             Ok(no_matching_rule)
         }
 
@@ -90,7 +105,7 @@ pub async fn routes(
                 .await
                 .unwrap();
 
-                (logging.log_outgoing_response_to_client)(&resp);
+                //(logging.log_outgoing_response_to_client)(&resp);
 
                 if let Some(sleep) = first_matched_rule.sleep {
                     tokio::time::sleep(tokio::time::Duration::from_millis(sleep)).await;

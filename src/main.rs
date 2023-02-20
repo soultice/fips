@@ -1,4 +1,4 @@
-use std::alloc::System;
+use std::{alloc::System, collections::HashMap};
 
 #[global_allocator]
 static ALLOCATOR: System = System;
@@ -14,11 +14,10 @@ use log4rs::{
     encode::pattern::PatternEncoder,
 };
 
-use terminal_ui::debug::ResponseInfo;
 #[cfg(feature = "ui")]
 use terminal_ui::{
-    cli::{options::Opts, state::State, ui, App},
-    debug::{FipsInfo, PrintInfo, RequestInfo, TrafficInfo},
+    cli::{state::State, ui, App},
+    debug::{FipsInfo, PrintInfo, RequestInfo, TrafficInfo, ResponseInfo},
     util,
 };
 
@@ -57,67 +56,40 @@ use clap::Parser;
 use std::future::Future;
 use std::net::SocketAddr;
 use tokio::task::JoinHandle;
+use utility::{ log::Loggable, options::Opts };
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-type PrintRequest = Box<dyn Fn(&Request<Body>) -> () + Send + Sync>;
-type PrintResponse = Box<dyn Fn(&Response<Body>) -> () + Send + Sync>;
-type PrintPlainInfo = Box<dyn Fn(String) -> () + Send + Sync>;
-type PrintInfoType = Box<dyn Fn(&FipsInfo) -> () + Send + Sync>;
+type LogFunction = Box<dyn Fn(&Loggable) -> () + Send + Sync>;
 
-pub struct PaintLogsCallbacks {
-    log_incoming_request_to_fips: PrintRequest,
-    log_outgoing_request_to_server: PrintRequest,
-    log_incoming_response_from_server: PrintResponse,
-    log_outgoing_response_to_client: PrintResponse,
-    log_fips_info: PrintInfoType,
-    log_plain: PrintPlainInfo,
+pub struct PaintLogsCallbacks(LogFunction);
+
+#[cfg(not(feature = "ui"))]
+fn define_log_callbacks() -> PaintLogsCallbacks {
+    let log = Box::new(|message: &Loggable| info!("{:?}", message.message));
+    PaintLogsCallbacks(log)
 }
 
+#[cfg(feature = "ui")]
 fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
-    let innermost_state_1 = Arc::clone(&state);
-    let innermost_state_2 = Arc::clone(&state);
-    let innermost_state_4 = Arc::clone(&state);
-    let innermost_state_3 = Arc::clone(&state);
-    let innermost_state_5 = Arc::clone(&state);
-    let innermost_state_6 = Arc::clone(&state);
-    let innermost_state_7 = Arc::clone(&state);
+    let inner_state = Arc::clone(&state);
 
-    PaintLogsCallbacks {
-        log_incoming_request_to_fips: Box::new(move |message: &Request<Body>| {
-            innermost_state_1
-                .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo::from(message)))
-                .unwrap_or_default();
-        }),
-        log_outgoing_response_to_client: Box::new(move |message: &Response<Body>| {
-            innermost_state_2
-                .add_traffic_info(TrafficInfo::IncomingResponse(ResponseInfo::from(message)))
-                .unwrap_or_default();
-        }),
-        log_incoming_response_from_server: Box::new(move |message: &Response<Body>| {
-            innermost_state_3
-                .add_traffic_info(TrafficInfo::OutgoingResponse(ResponseInfo::from(message)))
-                .unwrap_or_default();
-        }),
-        log_outgoing_request_to_server: Box::new(move |message: &Request<Body>| {
-            innermost_state_4
-                .add_traffic_info(TrafficInfo::OutgoingRequest(RequestInfo::from(message)))
-                .unwrap_or_default();
-        }),
-        log_fips_info: Box::new(move |message: &FipsInfo| {
-            innermost_state_5
-                .add_message(PrintInfo::FIPS(message.clone()))
-                .unwrap_or_default();
-        }),
-        log_plain: Box::new(move |message: String| {
-            innermost_state_6
-                .add_message(PrintInfo::PLAIN(String::from(message)))
-                .unwrap_or_default();
-        }),
-    }
+    let log = Box::new(move |message: &Loggable| {
+        inner_state
+            .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo {
+                request_type: "".to_owned(),
+                method: "".to_owned(),
+                uri: "".to_owned(),
+                version: "".to_owned(),
+                headers: HashMap::new(),
+            }))
+            .unwrap_or_default();
+        info!("{:?}", message.message)
+    });
+    PaintLogsCallbacks(log)
 }
 
 // spawns the hyper server on a separate thread
@@ -141,7 +113,15 @@ fn spawn_backend(
             let innermost_configuration = inner_configuration.clone();
             let innermost_logger = inner_logger.clone();
 
-            async move { fips::routes(req, innermost_configuration, innermost_plugins, &innermost_logger).await }
+            async move {
+                fips::routes(
+                    req,
+                    innermost_configuration,
+                    innermost_plugins,
+                    &innermost_logger,
+                )
+                .await
+            }
         });
         let service = service_fn(responder);
 
@@ -186,24 +166,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Configuration::new(&opts.config).unwrap_or(Configuration::default()),
     ));
 
-    let state = Arc::new(State {
-        messages: Mutex::new(Vec::new()),
-        plugins: plugins.clone(),
-        configuration: configuration.clone(),
-        traffic_info: Mutex::new(vec![]),
-    });
+    let (state, app, logging) = {
+        #[cfg(feature = "ui")]
+        let (state, app, logging) = {
+            let state = Arc::new(State {
+                messages: Mutex::new(Vec::new()),
+                plugins: plugins.clone(),
+                configuration: configuration.clone(),
+                traffic_info: Mutex::new(vec![]),
+            });
 
-    let mut app = App::new(true, state, opts.clone());
+            let app = App::new(true, state.clone(), opts.clone());
 
-    let logging = &Arc::new(define_log_callbacks(app.state.clone()));
+            let logging = Arc::new(define_log_callbacks(app.state.clone()));
+            (Some(state), Some(app), logging)
+        };
+        #[cfg(not(feature = "ui"))]
+        let (state, app, logging) = {
+            let logging = Arc::new(define_log_callbacks());
+            (None::<std::marker::PhantomData<String>>, None::<std::marker::PhantomData<String>>, logging)
+        };
+        (state, app, logging)
+    };
+
     let addr = ([127, 0, 0, 1], opts.port).into();
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
-    let _rt_handle = spawn_backend(&configuration, &plugins, &addr, logging);
+
+    //let logging = &Arc::new(define_log_callbacks());
+    let _rt_handle = spawn_backend(&configuration, &plugins, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {
         enable_raw_mode()?;
+
+        let mut unwrapped_app = app.unwrap();
 
         let mut stdout = stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -235,7 +232,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         terminal.clear()?;
 
         panic::set_hook({
-            let captured_state = app.state.clone();
+            let captured_state = unwrapped_app.state.clone();
             Box::new(move |panic_info| {
                 captured_state
                     .add_message(PrintInfo::PLAIN(panic_info.to_string()))
@@ -244,14 +241,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
         loop {
-            terminal.draw(|f| ui::draw(f, &mut app))?;
+            terminal.draw(|f| ui::draw(f, &mut unwrapped_app))?;
 
             match rx.recv()? {
-                Event::Input(event) => util::match_keybinds(event.code, &mut app)?,
-                Event::Tick => app.on_tick()?,
+                Event::Input(event) => util::match_keybinds(event.code, &mut unwrapped_app)?,
+                Event::Tick => unwrapped_app.on_tick()?,
             };
 
-            if app.should_quit {
+            if unwrapped_app.should_quit {
                 disable_raw_mode()?;
                 execute!(
                     terminal.backend_mut(),

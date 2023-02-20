@@ -38,11 +38,11 @@ impl<'a> AppClient<'a> {
             }
         }
 
-        (logging.log_outgoing_request_to_server)(&client_req);
+        //(logging.log_outgoing_request_to_server)(&client_req);
 
         let client_res = client.request(client_req).await?;
 
-        (logging.log_incoming_response_from_server)(&client_res);
+        //(logging.log_incoming_response_from_server)(&client_res);
 
         let (mut client_parts, client_body) = client_res.into_parts();
 

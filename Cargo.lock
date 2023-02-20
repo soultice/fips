@@ -223,6 +223,7 @@ dependencies = [
  "terminal_ui",
  "tokio",
  "tui",
+ "utility",
 ]
 
 [[package]]
@@ -1135,13 +1136,13 @@ dependencies = [
 name = "terminal_ui"
 version = "0.1.0"
 dependencies = [
- "clap",
  "colorgrad",
  "configuration",
  "crossterm",
  "hyper",
  "plugin_registry",
  "tui",
+ "utility",
 ]
 
 [[package]]
@@ -1386,6 +1387,13 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+]
+
+[[package]]
+name = "utility"
+version = "0.1.0"
+dependencies = [
+ "clap",
 ]
 
 [[package]]

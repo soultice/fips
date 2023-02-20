@@ -9,15 +9,17 @@ members = [
 	"packages/terminal_ui",
 	"packages/configuration",
 	"packages/plugin_registry",
+	"packages/utility",
 ]
 
 [features]
 logging = ['plugin_registry/logging']
-ui = ['dep:terminal_ui']
+ui = []
 default = ['ui']
 
 [dependencies]
-terminal_ui = { path = "./packages/terminal_ui", optional=true }
+terminal_ui = { path = "./packages/terminal_ui" }
+utility = { path = "./packages/utility" }
 plugin_registry = { path = "./packages/plugin_registry" }
 configuration = { path = "./packages/configuration" }
 tokio= { version="1.0", features=["full"] }

@@ -1,4 +1,4 @@
-use crate::cli::options::Opts;
+use utility::options::Opts;
 use crate::cli::state::State;
 use crate::util::TabsState;
 use tui::gradient::BorderGradients;
