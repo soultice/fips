@@ -3,5 +3,6 @@
 /config/
 /plugins/
 /log/
+/testfiles/
 /test-*
 Cargo.lock
