@@ -1,10 +1,57 @@
-use std::{alloc::System, collections::HashMap};
+use std::{alloc::System};
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-
+mod client;
+mod fips;
 use log::info;
+use tokio::runtime::Runtime;
+use clap::Parser;
+use std::net::SocketAddr;
+use tokio::task::JoinHandle;
+use utility::{ log::Loggable, options::Opts };
+use configuration::Configuration;
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Body, Request, Server,
+};
+use plugin_registry::ExternalFunctions;
+use std::{
+    panic,
+    sync::{Arc, Mutex},
+};
+
+#[cfg(feature = "ui")]
+use std::collections::HashMap;
+#[cfg(feature = "ui")]
+use terminal_ui::{
+    cli::{state::State, ui, App},
+    debug::{PrintInfo, RequestInfo, TrafficInfo},
+    util,
+};
+#[cfg(feature = "ui")]
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+#[cfg(feature = "ui")]
+use tui::{backend::CrosstermBackend, Terminal};
+#[cfg(feature = "ui")]
+use std::{
+    io::stdout,
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
+
+#[cfg(feature = "ui")]
+enum Event<I> {
+    Input(I),
+    Tick,
+}
+
 #[cfg(feature = "logging")]
 use log::LevelFilter;
 #[cfg(feature = "logging")]
@@ -13,52 +60,6 @@ use log4rs::{
     config::{Appender, Config, Root},
     encode::pattern::PatternEncoder,
 };
-
-#[cfg(feature = "ui")]
-use terminal_ui::{
-    cli::{state::State, ui, App},
-    debug::{PrintInfo, RequestInfo, TrafficInfo},
-    util,
-};
-
-#[cfg(feature = "ui")]
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-
-#[cfg(feature = "ui")]
-use tui::{backend::CrosstermBackend, Terminal};
-
-mod client;
-mod fips;
-
-use configuration::Configuration;
-use hyper::{
-    service::{make_service_fn, service_fn},
-    Body, Request, Server,
-};
-use plugin_registry::ExternalFunctions;
-use std::{
-    io::stdout,
-    panic,
-    sync::{mpsc, Arc, Mutex},
-    thread,
-    time::{Duration, Instant},
-};
-use tokio::runtime::Runtime;
-
-use clap::Parser;
-
-use std::net::SocketAddr;
-use tokio::task::JoinHandle;
-use utility::{ log::Loggable, options::Opts };
-
-enum Event<I> {
-    Input(I),
-    Tick,
-}
 
 type LogFunction = Box<dyn Fn(&Loggable) + Send + Sync>;
 
@@ -163,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Configuration::new(&opts.config).unwrap_or(Configuration::default()),
     ));
 
-    let (_state, app, logging) = {
+    let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
         let (state, app, logging) = {
             let state = Arc::new(State {
@@ -190,14 +191,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
 
-    //let logging = &Arc::new(define_log_callbacks());
     let _rt_handle = spawn_backend(&configuration, &plugins, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {
         enable_raw_mode()?;
 
-        let mut unwrapped_app = app.unwrap();
+        let mut unwrapped_app = _app.unwrap();
 
         let mut stdout = stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
