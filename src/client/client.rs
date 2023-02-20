@@ -17,7 +17,7 @@ pub struct AppClient<'a> {
 impl<'a> AppClient<'a> {
     pub async fn response(
         &mut self,
-        logging: &PaintLogsCallbacks<'a>,
+        logging: &PaintLogsCallbacks,
     ) -> Result<(Parts, serde_json::Value), Box<dyn Error>> {
         let client = Client::new();
         let body = Body::from(self.body.clone());

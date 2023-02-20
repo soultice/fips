@@ -27,7 +27,7 @@ impl Fips {
         headers: Option<Vec<String>>,
         body: Bytes,
         parts: &Parts,
-        logging: &PaintLogsCallbacks<'a>,
+        logging: &PaintLogsCallbacks,
     ) -> Result<(hyper::http::response::Parts, Value), Box<dyn Error>> {
         let mut client = AppClient {
             uri,
@@ -112,12 +112,12 @@ impl Fips {
     }
 }
 
-pub async fn handle_mode<'r>(
+pub async fn handle_mode(
     body: Bytes,
     parts: Parts,
     plugins: &Arc<Mutex<ExternalFunctions>>,
     first_matched_rule: &mut RuleCollection,
-    logging: &PaintLogsCallbacks<'r>,
+    logging: &PaintLogsCallbacks,
 ) -> Result<Response<Body>, Box<dyn Error>> {
     let method = &parts.method;
     let uri = &parts.uri;

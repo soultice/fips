@@ -44,7 +44,7 @@ pub async fn routes(
     req: Request<Body>,
     configuration: Arc<Mutex<Configuration>>,
     plugins: Arc<Mutex<ExternalFunctions>>,
-    logging: PaintLogsCallbacks<'_>,
+    logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>, hyper::Error> {
     (logging.log_incoming_request_to_fips)(&req);
 
