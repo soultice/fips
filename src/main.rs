@@ -1,35 +1,31 @@
-use std::{alloc::System};
+use std::alloc::System;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
 mod client;
 mod fips;
-use log::info;
-use tokio::runtime::Runtime;
 use clap::Parser;
-use std::net::SocketAddr;
-use tokio::task::JoinHandle;
-use utility::{ log::Loggable, options::Opts };
 use configuration::Configuration;
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Server,
 };
+use log::info;
 use plugin_registry::ExternalFunctions;
+use std::net::SocketAddr;
 use std::{
-    panic,
     sync::{Arc, Mutex},
 };
-
-#[cfg(feature = "ui")]
-use std::collections::HashMap;
-#[cfg(feature = "ui")]
-use terminal_ui::{
-    cli::{state::State, ui, App},
-    debug::{PrintInfo, RequestInfo, TrafficInfo},
-    util,
+use tokio::runtime::Runtime;
+use tokio::task::JoinHandle;
+use utility::{
+    log::{Loggable, LoggableType},
+    options::Opts,
 };
+#[cfg(feature = "ui")]
+use std::panic;
+
 #[cfg(feature = "ui")]
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
@@ -37,14 +33,20 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 #[cfg(feature = "ui")]
-use tui::{backend::CrosstermBackend, Terminal};
-#[cfg(feature = "ui")]
 use std::{
     io::stdout,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
+#[cfg(feature = "ui")]
+use terminal_ui::{
+    cli::{state::State, ui, App},
+    debug::{LoggableNT, PrintInfo},
+    util,
+};
+#[cfg(feature = "ui")]
+use tui::{backend::CrosstermBackend, Terminal};
 
 #[cfg(feature = "ui")]
 enum Event<I> {
@@ -76,15 +78,37 @@ fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
     let inner_state = Arc::clone(&state);
 
     let log = Box::new(move |message: &Loggable| {
-        inner_state
-            .add_traffic_info(TrafficInfo::IncomingRequest(RequestInfo {
-                request_type: "".to_owned(),
-                method: "".to_owned(),
-                uri: "".to_owned(),
-                version: "".to_owned(),
-                headers: HashMap::new(),
-            }))
-            .unwrap_or_default();
+        match &message.message_type {
+            LoggableType::IncomingRequestAtFfips(i) => {
+                inner_state
+                    .add_traffic_info(LoggableNT(LoggableType::IncomingRequestAtFfips(i.clone())))
+                    .unwrap();
+            }
+            LoggableType::OutGoingResponseFromFips(i) => {
+                inner_state
+                    .add_traffic_info(LoggableNT(LoggableType::OutGoingResponseFromFips(
+                        i.clone(),
+                    )))
+                    .unwrap();
+            }
+            LoggableType::OutgoingRequestToServer(i) => {
+                inner_state
+                    .add_traffic_info(LoggableNT(LoggableType::OutgoingRequestToServer(i.clone())))
+                    .unwrap();
+            }
+            LoggableType::IncomingResponseFromServer(i) => {
+                inner_state
+                    .add_traffic_info(LoggableNT(LoggableType::IncomingResponseFromServer(
+                        i.clone(),
+                    )))
+                    .unwrap();
+            }
+            LoggableType::Plain => {
+                inner_state
+                    .add_message(PrintInfo::PLAIN(message.message.clone()))
+                    .unwrap();
+            }
+        }
         info!("{:?}", message.message)
     });
     PaintLogsCallbacks(log)
@@ -182,7 +206,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
             let logging = Arc::new(define_log_callbacks());
-            (None::<std::marker::PhantomData<String>>, None::<std::marker::PhantomData<String>>, logging)
+            (
+                None::<std::marker::PhantomData<String>>,
+                None::<std::marker::PhantomData<String>>,
+                logging,
+            )
         };
         (state, app, logging)
     };

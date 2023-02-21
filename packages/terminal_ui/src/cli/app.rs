@@ -4,6 +4,11 @@ use crate::util::TabsState;
 use tui::gradient::BorderGradients;
 use std::sync::Arc;
 
+const REQUEST_TAB_NAME: &str = "Requests";
+const TRAFFIC_TAB_NAME: &str = "Traffic";
+const RULES_TAB_NAME: &str = "Loaded Rules";
+const PLUGINS_TAB_NAME: &str = "Loaded Plugins";
+
 pub struct App<'a> {
     pub should_quit: bool,
     pub tabs: TabsState<'a>,
@@ -27,10 +32,10 @@ impl<'a> App<'a> {
         App {
             should_quit: false,
             tabs: TabsState::new(vec![
-                "Requests",
-                "Traffic",
-                "Loaded Rules",
-                "Loaded Plugins",
+                REQUEST_TAB_NAME,
+                TRAFFIC_TAB_NAME,
+                RULES_TAB_NAME,
+                PLUGINS_TAB_NAME,
             ]),
             show_chart: true,
             enhanced_graphics,

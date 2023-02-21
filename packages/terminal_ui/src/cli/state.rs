@@ -5,13 +5,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::debug::{PrintInfo, TrafficInfo};
+use crate::debug::{PrintInfo, LoggableNT};
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,
     pub plugins: Arc<Mutex<ExternalFunctions>>,
     pub configuration: Arc<Mutex<Configuration>>,
-    pub traffic_info: Mutex<Vec<TrafficInfo>>,
+    pub traffic_info: Mutex<Vec<LoggableNT>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,7 +20,7 @@ pub enum MainError {
 }
 
 impl State {
-    pub fn add_traffic_info(&self, traffic_info: TrafficInfo) -> Result<(), MainError> {
+    pub fn add_traffic_info(&self, traffic_info: LoggableNT) -> Result<(), MainError> {
         if let Ok(mut traffic) = self.traffic_info.lock() {
             traffic.insert(0, traffic_info);
             if traffic.len() > 20 {

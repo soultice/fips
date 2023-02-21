@@ -1,35 +1,12 @@
 use hyper::{Body, Request};
 use std::collections::HashMap;
 use tui::text::Text;
+use utility::log::RequestInfo;
 
-#[derive(Debug, Clone)]
-pub struct RequestInfo {
-    pub request_type: String,
-    pub method: String,
-    pub uri: String,
-    pub version: String,
-    pub headers: HashMap<String, String>,
-}
+pub struct RequestInfoNT(pub RequestInfo);
 
-impl<'a> From<&RequestInfo> for Text<'a> {
-    fn from(request_info: &RequestInfo) -> Text<'a> {
-        let mut text = String::from(&request_info.method);
-        text.push(' ');
-        text.push_str(&request_info.uri);
-        text.push(' ');
-        text.push_str(&request_info.version);
-        for (k, v) in &request_info.headers {
-            text += "\n";
-            text += k;
-            text += " : ";
-            text += v;
-        }
-        Text::from(text)
-    }
-}
-
-impl From<&Request<Body>> for RequestInfo {
-    fn from(request: &Request<Body>) -> RequestInfo {
+impl From<&Request<Body>> for RequestInfoNT {
+    fn from(request: &Request<Body>) -> RequestInfoNT {
         let method = String::from(request.method().clone().as_str());
         let uri = request.uri().clone().to_string();
         let version = format!("{:?}", request.version().clone());
@@ -40,12 +17,29 @@ impl From<&Request<Body>> for RequestInfo {
                 String::from(v.clone().to_str().unwrap()),
             );
         }
-        RequestInfo {
+        RequestInfoNT(RequestInfo {
             request_type: String::from("placeholder"),
             method,
             uri,
             version,
             headers,
+        })
+    }
+}
+
+impl<'a> From<&RequestInfoNT> for Text<'a> {
+    fn from(request_info: &RequestInfoNT) -> Text<'a> {
+        let mut text = String::from(&request_info.0.method);
+        text.push(' ');
+        text.push_str(&request_info.0.uri);
+        text.push(' ');
+        text.push_str(&request_info.0.version);
+        for (k, v) in &request_info.0.headers {
+            text += "\n";
+            text += k;
+            text += " : ";
+            text += v;
         }
+        Text::from(text)
     }
 }

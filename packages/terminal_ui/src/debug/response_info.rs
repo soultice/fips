@@ -1,32 +1,12 @@
-use hyper::{Body, Response};
-use std::collections::HashMap;
+use utility::log::ResponseInfo;
 use tui::text::Text;
+use std::collections::HashMap;
+use hyper::{Body, Response};
 
-#[derive(Debug, Clone)]
-pub struct ResponseInfo {
-    pub response_type: String,
-    status: String,
-    version: String,
-    headers: HashMap<String, String>,
-}
+pub struct ResponseInfoNT(pub ResponseInfo);
 
-impl<'a> From<&ResponseInfo> for Text<'a> {
-    fn from(request_info: &ResponseInfo) -> Text<'a> {
-        let mut text = String::from(&request_info.status);
-        text.push(' ');
-        text.push_str(&request_info.version);
-        for (k, v) in &request_info.headers {
-            text += "\n";
-            text += k;
-            text += " : ";
-            text += v;
-        }
-        Text::from(text)
-    }
-}
-
-impl From<&Response<Body>> for ResponseInfo {
-    fn from(response: &Response<Body>) -> ResponseInfo {
+impl From<&Response<Body>> for ResponseInfoNT {
+    fn from(response: &Response<Body>) -> ResponseInfoNT {
         let status = String::from(response.status().clone().as_str());
         let version = format!("{:?}", response.version().clone());
         let mut headers = HashMap::new();
@@ -36,11 +16,27 @@ impl From<&Response<Body>> for ResponseInfo {
                 String::from(v.clone().to_str().unwrap()),
             );
         }
-        ResponseInfo {
+        ResponseInfoNT(ResponseInfo {
             response_type: String::from("placeholder"),
             status,
             version,
             headers,
-        }
+        })
     }
 }
+
+impl<'a> From<&ResponseInfoNT> for Text<'a> {
+    fn from(request_info: &ResponseInfoNT) -> Text<'a> {
+        let mut text = String::from(&request_info.0.status);
+        text.push(' ');
+        text.push_str(&request_info.0.version);
+        for (k, v) in &request_info.0.headers {
+            text += "\n";
+            text += k;
+            text += " : ";
+            text += v;
+        }
+        Text::from(text)
+    }
+}
+

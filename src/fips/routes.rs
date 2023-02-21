@@ -12,20 +12,7 @@ use hyper::{
 use plugin_registry::ExternalFunctions;
 use std::sync::{Arc, Mutex};
 
-
-use utility::log::{Loggable, LoggableType};
-
-impl From<&SplitRequest> for Loggable {
-    fn from(req: &SplitRequest) -> Self {
-        Loggable {
-            message_type: LoggableType::IncomingRequestAtFfips,
-            message: format!(
-                "Incoming request at FIPS: {} {}",
-                req.method, req.uri
-            ),
-        }
-    }
-}
+use utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo};
 
 struct SplitRequest {
     uri: Uri,
@@ -38,16 +25,18 @@ struct SplitRequest {
 impl SplitRequest {
     async fn new(req: Request<Body>) -> Self {
         let (parts, body) = req.into_parts();
-        let uri = parts.uri.clone();
-        let method = parts.method.clone();
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
-        let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
-        SplitRequest {
-            uri,
-            method,
-            body_text,
-            body_bytes,
-            parts,
+        {
+            let uri = parts.uri.clone();
+            let method = parts.method.clone();
+            let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+            let body_text = String::from_utf8(body_bytes.to_vec()).unwrap();
+            SplitRequest {
+                uri,
+                method,
+                body_text,
+                body_bytes,
+                parts,
+            }
         }
     }
 }
@@ -59,11 +48,14 @@ pub async fn routes(
     plugins: Arc<Mutex<ExternalFunctions>>,
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>, hyper::Error> {
+    let requestinfo = RequestInfo::from(&req);
+    let log_output = Loggable {
+        message_type: LoggableType::IncomingRequestAtFfips(requestinfo),
+        message: "".to_owned(),
+    };
+    (logging.0)(&log_output);
 
     let split = SplitRequest::new(req).await;
-
-    let loggable = Loggable::from(&split);
-    (logging.0)(&loggable);
 
     if split.method == Method::OPTIONS {
         let mut preflight = Response::new(Body::default());
@@ -82,7 +74,10 @@ pub async fn routes(
             let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
             *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
             add_cors_headers(no_matching_rule.headers_mut());
-            //(logging.log_plain)(format!("No matching rule found for URI: {}", &split.uri));
+            (logging.0)(&Loggable {
+                message: format!("No matching rule found for URI: {}", &split.uri),
+                message_type: LoggableType::Plain,
+            });
             Ok(no_matching_rule)
         }
 
@@ -90,10 +85,8 @@ pub async fn routes(
             (&Method::GET, "/favicon.ico") => Ok(Response::new(Body::default())),
 
             _ => {
-                let mut first_matched_rule = configuration
-                    .lock()
-                    .unwrap()
-                    .clone_rule(matching_rules[0]);
+                let mut first_matched_rule =
+                    configuration.lock().unwrap().clone_rule(matching_rules[0]);
 
                 let resp: Response<Body> = handle_mode(
                     split.body_bytes,
@@ -105,7 +98,12 @@ pub async fn routes(
                 .await
                 .unwrap();
 
-                //(logging.log_outgoing_response_to_client)(&resp);
+                let responseinfo = ResponseInfo::from(&resp);
+                let log_output = Loggable {
+                    message_type: LoggableType::OutGoingResponseFromFips(responseinfo),
+                    message: "".to_owned(),
+                };
+                (logging.0)(&log_output);
 
                 if let Some(sleep) = first_matched_rule.sleep {
                     tokio::time::sleep(tokio::time::Duration::from_millis(sleep)).await;

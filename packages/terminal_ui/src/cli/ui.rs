@@ -1,6 +1,6 @@
 use crate::cli::state::State;
 use crate::cli::App;
-use crate::debug::{PrintInfo, TrafficInfo};
+use crate::debug::{PrintInfo, LoggableNT};
 use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -151,7 +151,7 @@ fn draw_info_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: Arc<Sta
 where
     B: Backend,
 {
-    let response_info: Vec<TrafficInfo> = state.traffic_info.lock().unwrap().to_vec();
+    let response_info: Vec<LoggableNT> = state.traffic_info.lock().unwrap().to_vec();
 
     let text: Vec<Text> = response_info
         .iter()

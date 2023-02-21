@@ -1,9 +1,10 @@
+use crate::PaintLogsCallbacks;
 use hyper::body::Buf;
 use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::error::Error;
 use std::str::FromStr;
-use crate::PaintLogsCallbacks;
+use utility::log::{ RequestInfo, Loggable, LoggableType, ResponseInfo };
 
 #[derive(Debug)]
 pub struct AppClient<'a> {
@@ -38,11 +39,17 @@ impl<'a> AppClient<'a> {
             }
         }
 
-        //(logging.log_outgoing_request_to_server)(&client_req);
+        (_logging.0)(&Loggable {
+            message_type: LoggableType::OutgoingRequestToServer(RequestInfo::from(&client_req)),
+            message: "".to_string(),
+        });
 
         let client_res = client.request(client_req).await?;
 
-        //(logging.log_incoming_response_from_server)(&client_res);
+        (_logging.0)(&Loggable {
+            message_type: LoggableType::IncomingResponseFromServer(ResponseInfo::from(&client_res)),
+            message: "".to_string(),
+        });
 
         let (mut client_parts, client_body) = client_res.into_parts();
 

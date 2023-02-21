@@ -1,5 +1,5 @@
-use crate::PaintLogsCallbacks;
 use crate::client::AppClient;
+use crate::PaintLogsCallbacks;
 use configuration::{Mode, Rule, RuleCollection};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
@@ -14,6 +14,7 @@ use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
+use utility::log::{Loggable, LoggableType};
 
 struct Fips;
 
@@ -143,9 +144,7 @@ pub async fn handle_mode(
 
             let final_response_string = serde_json::to_string(&resp_json)?;
             match final_response_string {
-                s if s.is_empty() => {
-                    Response::from_parts(client_parts, Body::default())
-                }
+                s if s.is_empty() => Response::from_parts(client_parts, Body::default()),
                 s => Response::from_parts(client_parts, Body::from(s)),
             }
         }
@@ -184,15 +183,11 @@ pub async fn handle_mode(
 
     let _name = first_matched_rule.name.clone().unwrap_or(String::from(""));
 
-/*     let info = FipsInfo {
-            method: method.to_string(),
-            path: uri.to_string(),
-            mode: mode.to_string(),
-            matching_rules: 1,
-            name,
-            response_code: returned_response.status().to_string(),
-    }; */
-    // (logging.log_fips_info)(&info);
+    let info = Loggable {
+        message_type: LoggableType::Plain,
+        message: format!("Request {method} {uri} {mode} {_name}"),
+    };
+    (logging.0)(&info);
 
     returned_response
         .headers_mut()
