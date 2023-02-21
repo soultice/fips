@@ -1,7 +1,0 @@
-- path: ^/foo/$
-  forwardUri:
-    "http://localhost:8888/mock"
-
-- path: ^/foo/$
-  forwardUri:
-    "http://localhost:8888/mock"
