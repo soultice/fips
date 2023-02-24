@@ -141,6 +141,7 @@ impl Configuration {
 
         let set = RegexSet::new(rule_path_names).unwrap();
 
+        // finally determines if rule will be aplied
         set.matches(uri)
             .into_iter()
             .filter(|i| {

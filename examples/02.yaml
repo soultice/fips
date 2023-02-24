@@ -1,9 +1,11 @@
-- path: ^/foo/$
-  forwardUri:
-    "http://localhost:8888/mock"
-  backwardHeaders:
-    - "x-app-name"
+- PROXY: 
+    path: ^/foo/$
+    forwardUri:
+      "http://localhost:8888/mock"
+    backwardHeaders:
+      - "x-app-name"
 
-- path: ^/foo/$
-  forwardUri:
-    "http://localhost:8888/mock"
+- PROXY: 
+    path: ^/foo/$
+    forwardUri:
+      "http://localhost:8888/mock"

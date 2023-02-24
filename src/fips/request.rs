@@ -1,6 +1,9 @@
 use crate::client::AppClient;
 use crate::PaintLogsCallbacks;
-use configuration::{ProxyFunctions, Rule, RuleCollection, RuleTransformingFunctions};
+use configuration::{
+    rule::Rule,
+    rule_collection::{ProxyFunctions, RuleCollection, RuleTransformingFunctions},
+};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;

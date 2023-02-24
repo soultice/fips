@@ -1,26 +1,19 @@
-- path: ^/mock/foo/$
-  name: "this rule has a name"
-  #matchProbability: 0.5
-  #sleep: 15000
-  active: true
-  headers:
-    x-app-name: P.I.M.P.S
-  rules:
-    - path:
-      item:
-        users:
-          - name: rick
-            surname: sanchez
-            status: doing epic stuff
-          - name: morty
-            surname: smith
-            status: learning things
-            date: "{{SixMonthsPrior}}"
-
-- path: ^/mock/final/$
-  active: true
-  headers:
-    x-app-name: P.I.M.P.S
-  rules:
-    - path:
-      item:
+- MOCK: 
+    path: ^/mock/foo/$
+    name: "this rule has a name"
+    #matchProbability: 0.5
+    #sleep: 15000
+    active: true
+    headers:
+      x-app-name: P.I.M.P.S
+    rules:
+      - path:
+        item:
+          users:
+            - name: rick
+              surname: sanchez
+              status: doing epic stuff
+            - name: morty
+              surname: smith
+              status: learning things
+              date: "{{SixMonthsPrior}}"

@@ -2,7 +2,7 @@ use crate::PaintLogsCallbacks;
 
 use super::request::handle_mode;
 
-use configuration::Configuration;
+use configuration::configuration::Configuration;
 use hyper::{
     body::Bytes,
     header::{HeaderMap, HeaderValue},

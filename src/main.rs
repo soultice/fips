@@ -6,7 +6,7 @@ static ALLOCATOR: System = System;
 mod client;
 mod fips;
 use clap::Parser;
-use configuration::Configuration;
+use configuration::configuration::Configuration;
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Server,

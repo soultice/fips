@@ -1,4 +1,4 @@
-use configuration::Configuration;
+use configuration::configuration::Configuration;
 use std::sync::Mutex;
 use tui::{
     style::{Color, Modifier, Style},

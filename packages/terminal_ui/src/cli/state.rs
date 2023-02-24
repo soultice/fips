@@ -1,4 +1,4 @@
-use configuration::Configuration;
+use configuration::configuration::Configuration;
 use plugin_registry::ExternalFunctions;
 
 use std::{
