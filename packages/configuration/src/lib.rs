@@ -13,4 +13,6 @@ pub use configuration::Configuration;
 pub use mode::Mode;
 pub use rule::Rule;
 pub use rule_collection::RuleCollection;
+pub use rule_collection::ProxyFunctions;
+pub use rule_collection::RuleTransformingFunctions;
 

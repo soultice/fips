@@ -1,6 +1,6 @@
 use crate::client::AppClient;
 use crate::PaintLogsCallbacks;
-use configuration::{Mode, Rule, RuleCollection};
+use configuration::{ProxyFunctions, Rule, RuleCollection, RuleTransformingFunctions};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
@@ -121,26 +121,18 @@ pub async fn handle_mode(
     let uri = &parts.uri;
     let headers = &parts.headers;
 
-    let mode: Mode = first_matched_rule.mode();
+    let mut returned_response = match first_matched_rule {
+        RuleCollection::FIPS(r) => {
+            let uri = &r.form_forward_path(uri)?;
 
-    let mut returned_response = match mode {
-        Mode::PROXY | Mode::FIPS => {
-            let uri = &first_matched_rule.forward_url(uri);
+            let (client_parts, mut resp_json) =
+                Fips::forward_request(uri, method, r.get_forward_headers(), body, &parts, logging)
+                    .await?;
 
-            let (client_parts, mut resp_json) = Fips::forward_request(
-                uri,
-                method,
-                first_matched_rule.forward_headers.clone(),
-                body,
-                &parts,
-                logging,
-            )
-            .await?;
-
-            first_matched_rule.expand_rule_template(&plugins.lock().unwrap());
+            r.expand_rule_template(&plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
-            Fips::transform_response(&first_matched_rule.rules, &mut resp_json).unwrap_or_default();
+            Fips::transform_response(&r.rules, &mut resp_json).unwrap_or_default();
 
             let final_response_string = serde_json::to_string(&resp_json)?;
             match final_response_string {
@@ -148,44 +140,66 @@ pub async fn handle_mode(
                 s => Response::from_parts(client_parts, Body::from(s)),
             }
         }
-        Mode::MOCK => {
-            first_matched_rule.expand_rule_template(&plugins.lock().unwrap());
-            let body = match &first_matched_rule.rules {
-                Some(rules) => match rules.len() {
-                    0 => Response::new(Body::default()),
-                    _ => {
-                        let body = Body::from(serde_json::to_string(&rules[0].item)?);
-                        Response::new(body)
-                    }
-                },
-                None => Response::new(Body::default()),
+        RuleCollection::PROXY(r) => {
+            let uri = &r.form_forward_path(uri)?;
+
+            let (client_parts, resp_json) =
+                Fips::forward_request(uri, method, r.get_forward_headers(), body, &parts, logging)
+                    .await?;
+
+            let final_response_string = serde_json::to_string(&resp_json)?;
+            match final_response_string {
+                s if s.is_empty() => Response::from_parts(client_parts, Body::default()),
+                s => Response::from_parts(client_parts, Body::from(s)),
+            }
+        }
+        RuleCollection::MOCK(r) => {
+            r.expand_rule_template(&plugins.lock().unwrap());
+            let body = match &r.rules.len() {
+                0 => Response::new(Body::default()),
+                _ => {
+                    let body = Body::from(serde_json::to_string(&r.rules[0].item)?);
+                    Response::new(body)
+                }
             };
             body
         }
-        Mode::STATIC => {
-            let result = hyper_staticfile::resolve_path(
-                &first_matched_rule.serve_static.clone().unwrap(),
-                &parts.uri.to_string(),
-            )
-            .await?;
+        RuleCollection::STATIC(r) => {
+            let result =
+                hyper_staticfile::resolve_path(&r.path.clone(), &parts.uri.to_string()).await?;
             hyper_staticfile::ResponseBuilder::new()
                 .request_parts(method, uri, headers)
                 .build(result)?
         }
     };
 
-    Fips::keep_headers(&first_matched_rule.backward_headers, &mut returned_response)?;
+    match first_matched_rule {
+        RuleCollection::FIPS(r) => {
+            Fips::keep_headers(&r.get_backward_headers(), &mut returned_response)?;
+            Fips::add_headers(&r.headers, &mut returned_response)?;
+            Fips::set_status(&r.response_status, &mut returned_response)?;
+        }
+        RuleCollection::PROXY(r) => {
+            Fips::keep_headers(&r.get_backward_headers(), &mut returned_response)?;
+            Fips::add_headers(&r.headers, &mut returned_response)?;
+        }
+        RuleCollection::MOCK(r) => {
+            Fips::add_headers(&r.headers, &mut returned_response)?;
+            Fips::set_status(&r.response_status, &mut returned_response)?;
+        }
+        RuleCollection::STATIC(_) => {}
+    }
 
-    Fips::add_headers(&first_matched_rule.headers, &mut returned_response)?;
-
-    Fips::set_status(&first_matched_rule.response_status, &mut returned_response)?;
     // Add or change response status
 
-    let _name = first_matched_rule.name.clone().unwrap_or(String::from(""));
+    let _name = first_matched_rule
+        .get_name()
+        .clone()
+        .unwrap_or(String::from(""));
 
     let info = Loggable {
         message_type: LoggableType::Plain,
-        message: format!("Request {method} {uri} {mode} {_name}"),
+        message: format!("Request {method} {uri} {first_matched_rule} {_name}"),
     };
     (logging.0)(&info);
 

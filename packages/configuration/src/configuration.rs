@@ -46,30 +46,40 @@ impl Configuration {
         };
         rules.load_from_path(path_to_config).unwrap();
         if let Some(x) = rules.rule_collection.get_mut(0) {
-            x.selected = true;
+            x.set_selected();
             Ok(rules)
         } else {
             Err("could not find rulecollections".into())
         }
     }
 
+    fn get_selected_mut(&mut self) -> &mut RuleCollection {
+        &mut self.rule_collection[self.selected]
+    }
+
     pub fn toggle_rule(&mut self) {
-        self.rule_collection[self.selected].active = !self.rule_collection[self.selected].active
+        let current_rule = self.get_selected_mut();
+        let is_active = current_rule.get_active();
+        if is_active {
+            self.rule_collection[self.selected].set_inactive();
+        } else {
+            self.rule_collection[self.selected].set_active();
+        }
     }
 
     pub fn select_prev(&mut self) {
-        self.rule_collection[self.selected].selected = false;
+        self.get_selected_mut().set_unselected();
         match self.selected {
             0 => self.selected = self.rule_collection.len() - 1,
             _ => self.selected -= 1,
         }
-        self.rule_collection[self.selected].selected = true;
+        self.get_selected_mut().set_selected();
     }
 
     pub fn select_next(&mut self) {
-        self.rule_collection[self.selected].selected = false;
+        self.get_selected_mut().set_unselected();
         self.selected = (self.selected + 1) % self.rule_collection.len();
-        self.rule_collection[self.selected].selected = true;
+        self.get_selected_mut().set_selected();
     }
 
     pub fn paths(&self) -> Vec<String> {
@@ -120,13 +130,13 @@ impl Configuration {
         Ok(())
     }
 
-    pub fn active_matching_rules(&mut self, uri: &str, method: &Method, body: &str) -> Vec<usize> {
+    pub fn get_active_matching_rules(&mut self, uri: &str, method: &Method, body: &str) -> Vec<usize> {
         let mut rng = rand::thread_rng();
 
         let rule_path_names: Vec<String> = self
             .rule_collection
             .iter()
-            .map(|rule| rule.path.to_owned())
+            .map(|rule| rule.get_path())
             .collect();
 
         let set = RegexSet::new(rule_path_names).unwrap();
@@ -134,22 +144,22 @@ impl Configuration {
         set.matches(uri)
             .into_iter()
             .filter(|i| {
-                if !self.rule_collection[*i].active {
+                if !self.rule_collection[*i].get_active() {
                     return false;
                 }
 
                 let mut probability_matches = true;
-                if let Some(prob) = self.rule_collection[*i].match_with_prob {
+                if let Some(prob) = self.rule_collection[*i].get_match_with_prob() {
                     probability_matches = rng.gen_range(0.0, 1.0) < prob;
                 }
 
                 let mut body_matches = true;
-                if let Some(match_body) = &self.rule_collection[*i].match_body_contains {
+                if let Some(match_body) = &self.rule_collection[*i].get_match_body_contains() {
                     body_matches = body.contains(match_body);
                 }
 
                 let method_matches = self.rule_collection[*i]
-                    .match_methods
+                    .get_match_methods()
                     .as_ref()
                     .unwrap_or(&HTTP_METHODS)
                     .iter()

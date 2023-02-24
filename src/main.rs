@@ -23,7 +23,6 @@ use utility::{
     log::{Loggable, LoggableType},
     options::Opts,
 };
-#[cfg(feature = "ui")]
 use std::panic;
 
 #[cfg(feature = "ui")]

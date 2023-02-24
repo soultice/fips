@@ -16,23 +16,23 @@ impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
             .iter()
             .map(|c| {
                 let mut lines: Vec<Spans> = vec![];
-                if let Some(rule_name) = c.name.clone() {
+                if let Some(rule_name) = c.get_name().clone() {
                     lines.extend(vec![Spans::from(format!(
                         "name: {} --- path: {}",
-                        rule_name, c.path
+                        rule_name, c.get_path()
                     ))]);
                 } else {
-                    lines.extend(vec![Spans::from(format!("path: {}", c.path.clone()))]);
+                    lines.extend(vec![Spans::from(format!("path: {}", c.get_path().clone()))]);
                 }
-                let bg = match c.selected {
+                let bg = match c.get_selected() {
                     true => Color::Reset,
                     false => Color::Reset,
                 };
-                let fg = match c.active {
+                let fg = match c.get_active() {
                     true => Color::Blue,
                     false => Color::DarkGray,
                 };
-                let modifier = match c.selected {
+                let modifier = match c.get_selected() {
                     true => Modifier::UNDERLINED,
                     false => Modifier::DIM,
                 };

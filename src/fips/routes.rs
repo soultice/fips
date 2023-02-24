@@ -63,7 +63,7 @@ pub async fn routes(
         return Ok(preflight);
     }
 
-    let matching_rules = configuration.lock().unwrap().active_matching_rules(
+    let matching_rules = configuration.lock().unwrap().get_active_matching_rules(
         split.uri.path(),
         &split.method,
         &split.body_text,
@@ -105,7 +105,8 @@ pub async fn routes(
                 };
                 (logging.0)(&log_output);
 
-                if let Some(sleep) = first_matched_rule.sleep {
+                let sleep_time = first_matched_rule.get_sleep();
+                if let Some(sleep) = sleep_time{
                     tokio::time::sleep(tokio::time::Duration::from_millis(sleep)).await;
                 }
                 Ok(resp)
