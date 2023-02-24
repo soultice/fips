@@ -158,18 +158,17 @@ pub async fn handle_mode(
         }
         RuleCollection::MOCK(r) => {
             r.expand_rule_template(&plugins.lock().unwrap());
-            let body = match &r.rules.len() {
+            match &r.rules.len() {
                 0 => Response::new(Body::default()),
                 _ => {
                     let body = Body::from(serde_json::to_string(&r.rules[0].item)?);
                     Response::new(body)
                 }
-            };
-            body
+            }
         }
         RuleCollection::STATIC(r) => {
             let result =
-                hyper_staticfile::resolve_path(&r.path.clone(), &parts.uri.to_string()).await?;
+                hyper_staticfile::resolve_path(&r.static_base_dir.clone(), &parts.uri.to_string()).await?;
             hyper_staticfile::ResponseBuilder::new()
                 .request_parts(method, uri, headers)
                 .build(result)?
@@ -197,7 +196,6 @@ pub async fn handle_mode(
 
     let _name = first_matched_rule
         .get_name()
-        .clone()
         .unwrap_or(String::from(""));
 
     let info = Loggable {

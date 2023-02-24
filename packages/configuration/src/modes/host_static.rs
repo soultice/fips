@@ -18,6 +18,7 @@ pub struct STATIC {
     #[serde(default = "default_as_true")]
     pub active: bool,
     pub headers: Option<HashMap<String, String>>,
+    pub static_base_dir: String,
 }
 
 impl CommonFunctions for STATIC {

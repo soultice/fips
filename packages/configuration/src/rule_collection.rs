@@ -1,7 +1,7 @@
-use crate::modes::proxy::PROXY;
+use crate::modes::fips::FIPS;
 use crate::modes::host_static::STATIC;
 use crate::modes::mock::MOCK;
-use crate::modes::fips::FIPS;
+use crate::modes::proxy::PROXY;
 
 use hyper::Uri;
 use plugin_registry::plugin::ExternalFunctions;
@@ -22,7 +22,7 @@ pub enum RuleCollectionError {
     StringFromatError(#[from] std::fmt::Error),
 }
 
-const MACH_ALL_REQUESTS_STR: &str = "^/*$";
+const MACH_ALL_REQUESTS_STR: &str = "^/.*$";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RuleCollection {
@@ -46,6 +46,7 @@ impl Default for RuleCollection {
             active: true,
             path: String::from(MACH_ALL_REQUESTS_STR),
             headers: None,
+            static_base_dir: String::from(std::env::current_dir().unwrap().to_str().unwrap()),
         })
     }
 }
