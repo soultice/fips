@@ -1,0 +1,17 @@
+[package]
+name = "terminal_ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+configuration = { path = "../configuration" }
+utility = { path = "../utility" }
+plugin_registry = { path = "../plugin_registry" }
+crossterm = "0.25"
+hyper = { version = "0.14", features = ["full"] }
+colorgrad = "0.6.2"
+
+[dependencies.tui]
+git = "https://github.com/soultice/tui-rs.git"
+default-features = false
+features = ['crossterm']

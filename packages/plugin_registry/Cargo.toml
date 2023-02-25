@@ -1,0 +1,19 @@
+[package]
+name = "plugin_registry"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+logging = []
+
+[dependencies]
+json_dotpath = "1.0.3"
+libloading = "0.6.6"
+serde_json = "1.0.60"
+log = "0.4.17"
+
+[dependencies.serde]
+version = "1.0.118"
+features = ["derive"]

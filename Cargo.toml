@@ -1,0 +1,58 @@
+[package]
+name = "fips"
+version = "0.0.1"
+authors = ["Florian Pfingstag <soultice@gmail.com>"]
+edition = "2021"
+
+[workspace]
+members = [
+	"packages/terminal_ui",
+	"packages/configuration",
+	"packages/plugin_registry",
+	"packages/utility",
+]
+
+[features]
+logging = ['plugin_registry/logging']
+ui = []
+default = ['ui']
+
+[dependencies]
+terminal_ui = { path = "./packages/terminal_ui" }
+utility = { path = "./packages/utility" }
+plugin_registry = { path = "./packages/plugin_registry" }
+configuration = { path = "./packages/configuration" }
+tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }
+hyper-staticfile = { version = "0.9.2" }
+clap = { version = "3.0.0-rc.7", features = ["derive"] }
+bytes = "1.0.0"
+serde_yaml = "0.8.14"
+serde = "1.0.118"
+serde_json = "1.0.60"
+json-patch = "*"
+crossterm = "0.25"
+log = "0.4.17"
+futures = "0.3.19"
+json_dotpath = "1.0.3"
+colorgrad = "0.6.2"
+lazy_static = "1.4.0"
+http = "0.2.6"
+thiserror = "1.0.38"
+schemars = "0.8.11"
+
+[dependencies.tui]
+git = "https://github.com/soultice/tui-rs.git"
+default-features = false
+features = ['crossterm']
+#version = "0.13"
+
+[dependencies.log4rs]
+version = "1.2.0"
+features = [
+	'file_appender',
+	'rolling_file_appender',
+	'compound_policy',
+	'delete_roller',
+	'size_trigger'
+]

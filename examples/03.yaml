@@ -1,0 +1,10 @@
+- Fips:
+    path: ^/fips/$
+    matchMethods:
+      - GET
+      - POST
+    forwardUri: 'http://localhost:8888/mock'
+    rules:
+      - path: 'users.>>'
+        item:
+          bar: '{{SixMonthsPrior}}'

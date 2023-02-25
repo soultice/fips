@@ -1,0 +1,9 @@
+/target
+/.idea/
+/config/
+/plugins/
+/log/
+/testfiles/
+/test-*
+fips-schema.json
+Cargo.lock

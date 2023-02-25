@@ -1,0 +1,4 @@
+- path: ^/.*$
+  active: true
+  serveStatic: '/home/fpfings/'
+

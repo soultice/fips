@@ -1,0 +1,54 @@
+
+targets = []
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+notice = "warn"
+ignore = [
+    #"RUSTSEC-0000-0000"
+    "RUSTSEC-2021-0003"
+]
+[licenses]
+unlicensed = "deny"
+allow = [
+    "MIT",
+]
+deny = []
+copyleft = "warn"
+allow-osi-fsf-free = "neither"
+default = "deny"
+confidence-threshold = 0.8
+exceptions = [
+    { name="libloading", version="*", allow=["ISC"]},
+    { name="instant", version="*", allow=["BSD-3-Clause"]},
+    { name="ryu", version="*", allow=["BSL-1.0"]},
+]
+
+#license-files = [
+    # Each entry is a crate relative path, and the (opaque) hash of its contents
+    #{ path = "LICENSE", hash = 0xbd0eed23 }
+#]
+
+[licenses.private]
+ignore = false
+registries = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+allow = []
+deny = []
+skip = []
+skip-tree = []
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
