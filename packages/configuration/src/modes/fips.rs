@@ -3,8 +3,8 @@ use plugin_registry::plugin::ExternalFunctions;
 use crate::rule_collection::{
     CommonFunctions, ProxyFunctions, RuleCollectionError,
     RuleTransformingFunctions,
-    recursive_expand,
-    default_as_true
+    apply_plugins,
+    default_as_true,
 };
 use crate::rule::Rule;
 
@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use std::{ collections::HashMap };
 use hyper::Uri;
 use std::str::{FromStr};
+use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct FIPS {
     pub name: Option<String>,
     pub path: String,
@@ -43,11 +44,11 @@ pub struct FIPS {
 }
 
 impl RuleTransformingFunctions for FIPS {
-    fn expand_rule_template(&mut self, template: &ExternalFunctions) {
+    fn apply_plugins(&mut self, template: &ExternalFunctions) {
         if let Some(rules) = &mut self.rules {
             for rule in rules {
                 if let Some(item) = &mut rule.item {
-                    recursive_expand(item, template);
+                    apply_plugins(item, template);
                 }
             }
         }

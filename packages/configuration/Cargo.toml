@@ -15,6 +15,7 @@ hyper = { version = "0.14", features = ["full"] }
 strum_macros = "0.20"
 lazy_static = "1.4.0"
 thiserror = "1.0.38"
+schemars = "0.8.11"
 
 [dependencies.serde]
 version = "1.0.118"

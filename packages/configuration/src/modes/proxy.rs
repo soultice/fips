@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::{FromStr};
 use hyper::Uri;
+use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct PROXY {
     pub path: String,
     pub name: Option<String>,

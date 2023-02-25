@@ -5,7 +5,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Parser, Clone)]
 #[clap(version = VERSION, author = "Florian Pfingstag")]
-pub struct Opts {
+pub struct CliOptions {
 	/// The directory from where to load config files
 	#[clap(short, long, default_value = ".")]
 	pub config: PathBuf,
@@ -15,5 +15,5 @@ pub struct Opts {
 	#[clap(short, long, default_value = "8888")]
 	pub port: u16,
 	#[clap(long)]
-	pub headless: bool,
+	pub write_schema: bool
 }

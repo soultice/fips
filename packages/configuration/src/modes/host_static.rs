@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use crate::rule_collection::{CommonFunctions, default_as_true};
 use std::collections::HashMap;
+use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct STATIC {
     pub name: Option<String>,
     pub path: String,

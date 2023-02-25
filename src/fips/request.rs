@@ -125,14 +125,14 @@ pub async fn handle_mode(
     let headers = &parts.headers;
 
     let mut returned_response = match first_matched_rule {
-        RuleCollection::FIPS(r) => {
+        RuleCollection::Fips(r) => {
             let uri = &r.form_forward_path(uri)?;
 
             let (client_parts, mut resp_json) =
                 Fips::forward_request(uri, method, r.get_forward_headers(), body, &parts, logging)
                     .await?;
 
-            r.expand_rule_template(&plugins.lock().unwrap());
+            r.apply_plugins(&plugins.lock().unwrap());
 
             // if the response can not be transformed we do nothing
             Fips::transform_response(&r.rules, &mut resp_json).unwrap_or_default();
@@ -143,7 +143,7 @@ pub async fn handle_mode(
                 s => Response::from_parts(client_parts, Body::from(s)),
             }
         }
-        RuleCollection::PROXY(r) => {
+        RuleCollection::Proxy(r) => {
             let uri = &r.form_forward_path(uri)?;
 
             let (client_parts, resp_json) =
@@ -156,8 +156,8 @@ pub async fn handle_mode(
                 s => Response::from_parts(client_parts, Body::from(s)),
             }
         }
-        RuleCollection::MOCK(r) => {
-            r.expand_rule_template(&plugins.lock().unwrap());
+        RuleCollection::Mock(r) => {
+            r.apply_plugins(&plugins.lock().unwrap());
             match &r.rules.len() {
                 0 => Response::new(Body::default()),
                 _ => {
@@ -166,7 +166,7 @@ pub async fn handle_mode(
                 }
             }
         }
-        RuleCollection::STATIC(r) => {
+        RuleCollection::Static(r) => {
             let result =
                 hyper_staticfile::resolve_path(&r.static_base_dir.clone(), &parts.uri.to_string()).await?;
             hyper_staticfile::ResponseBuilder::new()
@@ -176,20 +176,20 @@ pub async fn handle_mode(
     };
 
     match first_matched_rule {
-        RuleCollection::FIPS(r) => {
+        RuleCollection::Fips(r) => {
             Fips::keep_headers(&r.get_backward_headers(), &mut returned_response)?;
             Fips::add_headers(&r.headers, &mut returned_response)?;
             Fips::set_status(&r.response_status, &mut returned_response)?;
         }
-        RuleCollection::PROXY(r) => {
+        RuleCollection::Proxy(r) => {
             Fips::keep_headers(&r.get_backward_headers(), &mut returned_response)?;
             Fips::add_headers(&r.headers, &mut returned_response)?;
         }
-        RuleCollection::MOCK(r) => {
+        RuleCollection::Mock(r) => {
             Fips::add_headers(&r.headers, &mut returned_response)?;
             Fips::set_status(&r.response_status, &mut returned_response)?;
         }
-        RuleCollection::STATIC(_) => {}
+        RuleCollection::Static(_) => {}
     }
 
     // Add or change response status

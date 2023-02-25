@@ -11,6 +11,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::{Deref, DerefMut},
 };
+use schemars::JsonSchema;
 
 use thiserror::Error;
 
@@ -24,17 +25,17 @@ pub enum RuleCollectionError {
 
 const MACH_ALL_REQUESTS_STR: &str = "^/.*$";
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub enum RuleCollection {
-    STATIC(STATIC),
-    MOCK(MOCK),
-    PROXY(PROXY),
-    FIPS(FIPS),
+    Static(STATIC),
+    Mock(MOCK),
+    Proxy(PROXY),
+    Fips(FIPS),
 }
 
 impl Default for RuleCollection {
     fn default() -> RuleCollection {
-        RuleCollection::STATIC(STATIC {
+        RuleCollection::Static(STATIC {
             name: Some(String::from(
                 "static asset fallback rule if no others found",
             )),
@@ -59,7 +60,7 @@ pub trait ProxyFunctions {
 }
 
 pub trait RuleTransformingFunctions {
-    fn expand_rule_template(&mut self, template: &ExternalFunctions);
+    fn apply_plugins(&mut self, template: &ExternalFunctions);
 }
 
 pub trait CommonFunctions {
@@ -83,10 +84,10 @@ impl Deref for RuleCollection {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            RuleCollection::STATIC(s) => s,
-            RuleCollection::MOCK(s) => s,
-            RuleCollection::PROXY(s) => s,
-            RuleCollection::FIPS(s) => s,
+            RuleCollection::Static(s) => s,
+            RuleCollection::Mock(s) => s,
+            RuleCollection::Proxy(s) => s,
+            RuleCollection::Fips(s) => s,
         }
     }
 }
@@ -94,10 +95,10 @@ impl Deref for RuleCollection {
 impl DerefMut for RuleCollection {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            RuleCollection::STATIC(s) => s,
-            RuleCollection::MOCK(s) => s,
-            RuleCollection::PROXY(s) => s,
-            RuleCollection::FIPS(s) => s,
+            RuleCollection::Static(s) => s,
+            RuleCollection::Mock(s) => s,
+            RuleCollection::Proxy(s) => s,
+            RuleCollection::Fips(s) => s,
         }
     }
 }
@@ -105,10 +106,10 @@ impl DerefMut for RuleCollection {
 impl Display for RuleCollection {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            RuleCollection::STATIC(_s) => write!(f, "STATIC"),
-            RuleCollection::MOCK(_s) => write!(f, "MOCK"),
-            RuleCollection::PROXY(_s) => write!(f, "PROXY"),
-            RuleCollection::FIPS(_s) => write!(f, "FIPS"),
+            RuleCollection::Static(_s) => write!(f, "STATIC"),
+            RuleCollection::Mock(_s) => write!(f, "MOCK"),
+            RuleCollection::Proxy(_s) => write!(f, "PROXY"),
+            RuleCollection::Fips(_s) => write!(f, "FIPS"),
         }
     }
 }
@@ -117,7 +118,7 @@ pub fn default_as_true() -> bool {
     true
 }
 
-pub fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctions) {
+pub fn apply_plugins(value: &mut serde_json::Value, plugins: &ExternalFunctions) {
     match value {
         serde_json::Value::String(val) => {
             if plugins.has(val) {
@@ -132,7 +133,7 @@ pub fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctio
         }
         serde_json::Value::Array(val) => {
             for i in val {
-                recursive_expand(i, plugins);
+                apply_plugins(i, plugins);
             }
         }
         serde_json::Value::Object(val) => {
@@ -158,7 +159,7 @@ pub fn recursive_expand(value: &mut serde_json::Value, plugins: &ExternalFunctio
                 }
                 _ => {
                     for (_, i) in val {
-                        recursive_expand(i, plugins);
+                        apply_plugins(i, plugins);
                     }
                 }
             }

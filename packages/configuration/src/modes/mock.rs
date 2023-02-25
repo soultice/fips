@@ -1,14 +1,15 @@
 use crate::rule_collection::{
     CommonFunctions, RuleTransformingFunctions,
-    recursive_expand,
+    apply_plugins,
     default_as_true
 };
 use crate::rule::Rule;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap};
 use plugin_registry::plugin::ExternalFunctions;
+use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct MOCK {
     pub name: Option<String>,
     pub path: String,
@@ -30,10 +31,10 @@ pub struct MOCK {
     pub rules: Vec<Rule>,
 }
 impl RuleTransformingFunctions for MOCK {
-    fn expand_rule_template(&mut self, template: &ExternalFunctions) {
+    fn apply_plugins(&mut self, template: &ExternalFunctions) {
         for rule in &mut self.rules {
             if let Some(item) = &mut rule.item {
-                recursive_expand(item, template);
+                apply_plugins(item, template);
             }
         }
     }

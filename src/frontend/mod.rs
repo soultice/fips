@@ -31,7 +31,7 @@ use thiserror::Error;
 use tokio::runtime::Runtime;
 use utility::{
     log::{Loggable, LoggableType},
-    options::Opts,
+    options::CliOptions,
 };
 
 #[derive(Error, Debug)]
@@ -153,7 +153,7 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
 pub fn setup(
     plugins: Arc<Mutex<ExternalFunctions>>,
     configuration: Arc<Mutex<Configuration>>,
-    options: Opts,
+    options: CliOptions,
 ) -> (
     Option<Arc<State>>,
     Option<App<'static>>,

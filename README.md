@@ -8,8 +8,6 @@ Fips provides three different functionalities: It can function as a Fake data se
 
 ## Installation
 
-Due to Daimler internals, binaries can currently not be provided. If you wish to use Fips, build it from the sources:
-
 - Install [rust and cargo](cargo).
 - Checkout this repo.
 - Dir into it and run `cargo run` - or `cargo build` if you wish to produce an executable.

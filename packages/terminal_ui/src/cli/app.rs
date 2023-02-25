@@ -1,4 +1,4 @@
-use utility::options::Opts;
+use utility::options::CliOptions;
 use crate::cli::state::State;
 use crate::util::TabsState;
 use tui::gradient::BorderGradients;
@@ -15,7 +15,7 @@ pub struct App<'a> {
     pub show_chart: bool,
     pub enhanced_graphics: bool,
     pub state: Arc<State>,
-    pub opts: Opts,
+    pub opts: CliOptions,
     pub glow_interval: u8,
     pub gradients: BorderGradients,
     direction: Dir,
@@ -28,7 +28,7 @@ enum Dir {
 }
 
 impl<'a> App<'a> {
-    pub fn new(enhanced_graphics: bool, state: Arc<State>, opts: Opts) -> App<'a> {
+    pub fn new(enhanced_graphics: bool, state: Arc<State>, opts: CliOptions) -> App<'a> {
         App {
             should_quit: false,
             tabs: TabsState::new(vec![
