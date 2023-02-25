@@ -24,11 +24,11 @@ Also see `fips(.exe) --help`
 ```
 
 ## Hotkeys:
-<kdb>Tab</kdb> Go to next Tab
-<kdb>Shift</kdb>Tab</kdb> Go to previous Tab
-<kdb>c</kdb> clear the log output
-<kdb>r</kdb> reload config files
-<kdb>Esc</kdb> quit
+<kbd>Tab</kbd> Go to next Tab  
+<kbd>Shift</kbd>+ <kbd>Tab</kbd> Go to previous Tab  
+<kbd>c</kbd> clear the log output  
+<kbd>r</kbd> reload config files  
+<kbd>Esc</kbd> quit  
 
 ## Usage
 

@@ -2,17 +2,17 @@ use crate::PaintLogsCallbacks;
 
 use super::request::handle_mode;
 
-use configuration::configuration::Configuration;
+use fips_configuration::configuration::Configuration;
 use hyper::{
     body::Bytes,
     header::{HeaderMap, HeaderValue},
     http::request::Parts,
     Body, Method, Request, Response, StatusCode, Uri,
 };
-use plugin_registry::ExternalFunctions;
+use fips_plugin_registry::ExternalFunctions;
 use std::sync::{Arc, Mutex};
 
-use utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo};
+use fips_utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo};
 
 struct SplitRequest {
     uri: Uri,

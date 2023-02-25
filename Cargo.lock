@@ -133,23 +133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "configuration"
-version = "0.1.0"
-dependencies = [
- "hyper",
- "lazy_static",
- "plugin_registry",
- "rand 0.7.3",
- "regex",
- "schemars",
- "serde",
- "serde_json",
- "serde_yaml",
- "strum_macros",
- "thiserror",
-]
-
-[[package]]
 name = "crossterm"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -208,14 +191,18 @@ checksum = "c9b0705efd4599c15a38151f4721f7bc388306f61084d3bfd50bd07fbca5cb60"
 
 [[package]]
 name = "fips"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "bytes",
  "clap",
  "colorgrad",
- "configuration",
  "crossterm",
+ "fips_configuration",
+ "fips_plugin_registry",
+ "fips_terminal_ui",
+ "fips_utility",
  "futures",
+ "gradient_tui_fork",
  "http",
  "hyper",
  "hyper-staticfile",
@@ -224,16 +211,61 @@ dependencies = [
  "lazy_static",
  "log",
  "log4rs",
- "plugin_registry",
  "schemars",
  "serde",
  "serde_json",
  "serde_yaml",
- "terminal_ui",
  "thiserror",
  "tokio",
- "tui",
- "utility",
+]
+
+[[package]]
+name = "fips_configuration"
+version = "0.1.0"
+dependencies = [
+ "fips_plugin_registry",
+ "hyper",
+ "lazy_static",
+ "rand 0.7.3",
+ "regex",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "strum_macros",
+ "thiserror",
+]
+
+[[package]]
+name = "fips_plugin_registry"
+version = "0.1.0"
+dependencies = [
+ "json_dotpath",
+ "libloading",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fips_terminal_ui"
+version = "0.1.0"
+dependencies = [
+ "colorgrad",
+ "crossterm",
+ "fips_configuration",
+ "fips_plugin_registry",
+ "fips_utility",
+ "gradient_tui_fork",
+ "hyper",
+]
+
+[[package]]
+name = "fips_utility"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "hyper",
 ]
 
 [[package]]
@@ -360,6 +392,18 @@ dependencies = [
  "cfg-if",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+]
+
+[[package]]
+name = "gradient_tui_fork"
+version = "0.19.0"
+source = "git+https://github.com/soultice/tui-rs.git#00d171dab8edf83b5fd8c620b9a382fb5fa2b249"
+dependencies = [
+ "bitflags",
+ "cassowary",
+ "crossterm",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]
@@ -537,12 +581,13 @@ dependencies = [
 
 [[package]]
 name = "json-patch"
-version = "0.2.6"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f995a3c8f2bc3dd52a18a583e90f9ec109c047fa1603a853e46bcda14d2e279d"
+checksum = "e712e62827c382a77b87f590532febb1f8b2fdbc3eefa1ee37fe7281687075ef"
 dependencies = [
  "serde",
  "serde_json",
+ "thiserror",
  "treediff",
 ]
 
@@ -826,17 +871,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "plugin_registry"
-version = "0.1.0"
-dependencies = [
- "json_dotpath",
- "libloading",
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -868,11 +902,11 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.37"
+version = "1.0.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec757218438d5fda206afc041538b2f6d889286160d649a86a24d37e1235afd1"
+checksum = "5d727cae5b39d21da60fa540906919ad737832fe0b1c165da3a34d6548c849d6"
 dependencies = [
- "unicode-xid",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -1019,9 +1053,9 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "serde"
-version = "1.0.136"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce31e24b01e1e524df96f1c2fdd054405f8d7376249a5110886fb4b658484789"
+checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
 dependencies = [
  "serde_derive",
 ]
@@ -1038,9 +1072,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.136"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08597e7152fcd306f41838ed3e37be9eaeed2b61c42e2117266a554fab4662f9"
+checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1060,9 +1094,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.79"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
+checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
  "itoa",
  "ryu",
@@ -1159,13 +1193,13 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.91"
+version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b683b2b825c8eef438b77c36a06dc262294da3d5a5813fac20da149241dcd44d"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
 dependencies = [
  "proc-macro2",
  "quote",
- "unicode-xid",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -1175,19 +1209,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "terminal_ui"
-version = "0.1.0"
-dependencies = [
- "colorgrad",
- "configuration",
- "crossterm",
- "hyper",
- "plugin_registry",
- "tui",
- "utility",
 ]
 
 [[package]]
@@ -1338,9 +1359,9 @@ dependencies = [
 
 [[package]]
 name = "treediff"
-version = "3.0.2"
+version = "4.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "761e8d5ad7ce14bb82b7e61ccc0ca961005a275a060b9644a2431aa11553c2ff"
+checksum = "52984d277bdf2a751072b5df30ec0377febdb02f7696d64c2d7d54630bac4303"
 dependencies = [
  "serde_json",
 ]
@@ -1350,18 +1371,6 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
-
-[[package]]
-name = "tui"
-version = "0.19.0"
-source = "git+https://github.com/soultice/tui-rs.git#9b097fe813ce9412e944fbb1c4320913aa50240b"
-dependencies = [
- "bitflags",
- "cassowary",
- "crossterm",
- "unicode-segmentation",
- "unicode-width",
-]
 
 [[package]]
 name = "typemap-ors"
@@ -1388,6 +1397,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "099b7128301d285f79ddd55b9a83d5e6b9e97c92e0ea0daebee7263e932de992"
 
 [[package]]
+name = "unicode-ident"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84a22b9f218b40614adcb3f4ff08b703773ad44fa9423e4e0d346d5db86e4ebc"
+
+[[package]]
 name = "unicode-normalization"
 version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1409,12 +1424,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
 
 [[package]]
-name = "unicode-xid"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ccb82d61f80a663efe1f787a51b16b5a51e3314d6ac365b08639f52387b33f3"
-
-[[package]]
 name = "unsafe-any-ors"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1432,14 +1441,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "utility"
-version = "0.1.0"
-dependencies = [
- "clap",
- "hyper",
 ]
 
 [[package]]

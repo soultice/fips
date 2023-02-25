@@ -1,7 +1,7 @@
-use utility::options::CliOptions;
+use fips_utility::options::CliOptions;
 use crate::cli::state::State;
 use crate::util::TabsState;
-use tui::gradient::BorderGradients;
+use gradient_tui_fork::gradient::BorderGradients;
 use std::sync::Arc;
 
 const REQUEST_TAB_NAME: &str = "Requests";

@@ -4,7 +4,7 @@ use crate::debug::{PrintInfo, LoggableNT};
 use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use tui::{
+use gradient_tui_fork::{
     backend::Backend,
     gradient::BorderGradients,
     layout::{Constraint, Layout, Rect},

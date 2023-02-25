@@ -1,6 +1,6 @@
-use configuration::configuration::Configuration;
+use fips_configuration::configuration::Configuration;
 use std::sync::Mutex;
-use tui::{
+use gradient_tui_fork::{
     style::{Color, Modifier, Style},
     text::{Spans},
     widgets::{ListItem, List},

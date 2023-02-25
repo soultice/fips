@@ -3,15 +3,15 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use plugin_registry::ExternalFunctions;
+use fips_plugin_registry::ExternalFunctions;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use clap::Parser;
 use std::fs::File;
 
-use configuration::rule_collection::RuleCollection;
-use configuration::configuration::Configuration;
-use utility::{log::Loggable, options::CliOptions};
+use fips_configuration::rule_collection::RuleCollection;
+use fips_configuration::configuration::Configuration;
+use fips_utility::{log::Loggable, options::CliOptions};
 
 mod client;
 mod fips;

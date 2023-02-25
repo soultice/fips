@@ -1,17 +1,32 @@
 [package]
-name = "terminal_ui"
+name = "fips_terminal_ui"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "the terminal ui for fips"
+homepage = "https://github.com/soultice/fips"
+documentation = "https://github.com/soultice/fips"
+repository = "https://github.com/soultice/fips"
 
 [dependencies]
-configuration = { path = "../configuration" }
-utility = { path = "../utility" }
-plugin_registry = { path = "../plugin_registry" }
 crossterm = "0.25"
 hyper = { version = "0.14", features = ["full"] }
 colorgrad = "0.6.2"
 
-[dependencies.tui]
+[dependencies.fips_plugin_registry]
+path = "../plugin_registry"
+version = "0.1.0"
+
+[dependencies.fips_configuration]
+path = "../configuration"
+version = "0.1.0"
+
+[dependencies.fips_utility]
+path = "../utility"
+version = "0.1.0"
+
+[dependencies.gradient_tui_fork]
 git = "https://github.com/soultice/tui-rs.git"
 default-features = false
 features = ['crossterm']
+version = "0.19"

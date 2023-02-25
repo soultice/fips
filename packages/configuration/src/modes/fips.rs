@@ -1,4 +1,4 @@
-use plugin_registry::plugin::ExternalFunctions;
+use fips_plugin_registry::plugin::ExternalFunctions;
 
 use crate::rule_collection::{
     CommonFunctions, ProxyFunctions, RuleCollectionError,

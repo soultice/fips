@@ -4,7 +4,7 @@ use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::error::Error;
 use std::str::FromStr;
-use utility::log::{ RequestInfo, Loggable, LoggableType, ResponseInfo };
+use fips_utility::log::{ RequestInfo, Loggable, LoggableType, ResponseInfo };
 
 #[derive(Debug)]
 pub struct AppClient<'a> {

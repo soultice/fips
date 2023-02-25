@@ -1,4 +1,4 @@
-use tui::text::{Span, Spans};
+use gradient_tui_fork::text::{Span, Spans};
 
 #[derive(Clone)]
 pub struct FipsInfo {

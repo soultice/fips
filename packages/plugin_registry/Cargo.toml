@@ -1,7 +1,12 @@
 [package]
-name = "plugin_registry"
+name = "fips_plugin_registry"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "A plugin registry for FIPS"
+homepage = "https://github.com/soultice/fips"
+documentation = "https://github.com/soultice/fips"
+repository = "https://github.com/soultice/fips"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

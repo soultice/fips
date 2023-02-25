@@ -4,7 +4,7 @@ use crate::modes::mock::MOCK;
 use crate::modes::proxy::PROXY;
 
 use hyper::Uri;
-use plugin_registry::plugin::ExternalFunctions;
+use fips_plugin_registry::plugin::ExternalFunctions;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

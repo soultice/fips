@@ -1,5 +1,5 @@
-use configuration::configuration::Configuration;
-use plugin_registry::ExternalFunctions;
+use fips_configuration::configuration::Configuration;
+use fips_plugin_registry::ExternalFunctions;
 
 use std::{
     sync::{Arc, Mutex},

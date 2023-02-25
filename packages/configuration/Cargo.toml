@@ -1,12 +1,14 @@
 [package]
-name = "configuration"
+name = "fips_configuration"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "FIPS Configuration, used to configure the FIPS server"
+homepage = "https://github.com/soultice/fips"
+documentation = "https://github.com/soultice/fips"
+repository = "https://github.com/soultice/fips"
 
 [dependencies]
-plugin_registry = { path = "../plugin_registry" }
 serde_yaml = "0.8.14"
 serde_json = "1.0.60"
 regex = "1.4.2"
@@ -16,6 +18,10 @@ strum_macros = "0.20"
 lazy_static = "1.4.0"
 thiserror = "1.0.38"
 schemars = "0.8.11"
+
+[dependencies.fips_plugin_registry]
+path = "../plugin_registry"
+version = "0.1.0"
 
 [dependencies.serde]
 version = "1.0.118"

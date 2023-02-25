@@ -1,8 +1,8 @@
 use super::request_info::RequestInfoNT;
 use super::response_info::ResponseInfoNT;
 use std::fmt;
-use tui::text::Text;
-use utility::log::LoggableType;
+use gradient_tui_fork::text::Text;
+use fips_utility::log::LoggableType;
 
 #[derive(Debug, Clone)]
 pub struct LoggableNT(pub LoggableType);

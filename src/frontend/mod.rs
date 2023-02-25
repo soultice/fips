@@ -1,22 +1,22 @@
-use configuration::configuration::Configuration;
+use fips_configuration::configuration::Configuration;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use plugin_registry::ExternalFunctions;
+use fips_plugin_registry::ExternalFunctions;
 use std::{
     io::stdout,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
-use terminal_ui::{
+use fips_terminal_ui::{
     cli::{state::State, ui, App},
     debug::{LoggableNT, PrintInfo},
     util,
 };
-use tui::{backend::CrosstermBackend, Terminal};
+use gradient_tui_fork::{backend::CrosstermBackend, Terminal};
 
 enum Event<I> {
     Input(I),
@@ -29,7 +29,7 @@ use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tokio::runtime::Runtime;
-use utility::{
+use fips_utility::{
     log::{Loggable, LoggableType},
     options::CliOptions,
 };

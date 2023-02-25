@@ -1,5 +1,5 @@
 use colorgrad;
-use tui::{
+use gradient_tui_fork::{
     style::{Color},
 };
 

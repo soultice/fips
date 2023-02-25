@@ -1,5 +1,5 @@
-use utility::log::ResponseInfo;
-use tui::text::Text;
+use fips_utility::log::ResponseInfo;
+use gradient_tui_fork::text::Text;
 use std::collections::HashMap;
 use hyper::{Body, Response};
 

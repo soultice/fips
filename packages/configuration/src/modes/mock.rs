@@ -1,7 +1,7 @@
 use crate::rule_collection::{
     apply_plugins, default_as_true, CommonFunctions, RuleTransformingFunctions,
 };
-use plugin_registry::plugin::ExternalFunctions;
+use fips_plugin_registry::plugin::ExternalFunctions;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

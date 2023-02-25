@@ -1,7 +1,7 @@
 use hyper::{Body, Request};
 use std::collections::HashMap;
-use tui::text::Text;
-use utility::log::RequestInfo;
+use gradient_tui_fork::text::Text;
+use fips_utility::log::RequestInfo;
 
 pub struct RequestInfoNT(pub RequestInfo);
 

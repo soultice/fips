@@ -9,8 +9,8 @@ use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use configuration::configuration::Configuration;
-use plugin_registry::ExternalFunctions;
+use fips_configuration::configuration::Configuration;
+use fips_plugin_registry::ExternalFunctions;
 
 #[cfg(not(feature = "ui"))]
 use utility::log::Loggable;

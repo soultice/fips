@@ -1,7 +1,12 @@
 [package]
-name = "utility"
+name = "fips_utility"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "utility package used by fips"
+homepage = "https://github.com/soultice/fips"
+documentation = "https://github.com/soultice/fips"
+repository = "https://github.com/soultice/fips"
 
 [dependencies]
 clap = { version = "3.0.0-rc.7", features = ["derive"] }

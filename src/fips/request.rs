@@ -1,6 +1,6 @@
 use crate::client::AppClient;
 use crate::PaintLogsCallbacks;
-use configuration::{
+use fips_configuration::{
     rule::Rule,
     rule_collection::{ProxyFunctions, RuleCollection, RuleTransformingFunctions},
 };
@@ -10,14 +10,14 @@ use hyper::http::header::HeaderName;
 use hyper::http::request::Parts;
 use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
-use plugin_registry::ExternalFunctions;
+use fips_plugin_registry::ExternalFunctions;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
-use utility::log::{Loggable, LoggableType};
+use fips_utility::log::{Loggable, LoggableType};
 
 struct Fips;
 
