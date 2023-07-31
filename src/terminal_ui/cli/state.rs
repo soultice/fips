@@ -1,11 +1,8 @@
-use fips_configuration::configuration::Configuration;
-use fips_plugin_registry::ExternalFunctions;
-
 use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::debug::{PrintInfo, LoggableNT};
+use crate::{terminal_ui::debug::{PrintInfo, LoggableNT}, plugin_registry::ExternalFunctions, configuration::configuration::Configuration};
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,

@@ -1,7 +1,8 @@
-use fips_utility::log::ResponseInfo;
 use gradient_tui_fork::text::Text;
 use std::collections::HashMap;
 use hyper::{Body, Response};
+
+use crate::utility::log::ResponseInfo;
 
 pub struct ResponseInfoNT(pub ResponseInfo);
 

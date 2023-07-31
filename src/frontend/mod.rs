@@ -1,20 +1,13 @@
-use fips_configuration::configuration::Configuration;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use fips_plugin_registry::ExternalFunctions;
 use std::{
     io::stdout,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
-};
-use fips_terminal_ui::{
-    cli::{state::State, ui, App},
-    debug::{LoggableNT, PrintInfo},
-    util,
 };
 use gradient_tui_fork::{backend::CrosstermBackend, Terminal};
 
@@ -23,16 +16,12 @@ enum Event<I> {
     Tick,
 }
 
-use crate::PaintLogsCallbacks;
+use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, plugin_registry::ExternalFunctions, configuration::configuration::Configuration, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
 use log::info;
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tokio::runtime::Runtime;
-use fips_utility::{
-    log::{Loggable, LoggableType},
-    options::CliOptions,
-};
 
 #[derive(Error, Debug)]
 pub enum FrontendError {

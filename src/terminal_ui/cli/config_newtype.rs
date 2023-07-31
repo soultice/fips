@@ -1,10 +1,11 @@
-use fips_configuration::configuration::Configuration;
 use std::sync::Mutex;
 use gradient_tui_fork::{
     style::{Color, Modifier, Style},
     text::{Spans},
     widgets::{ListItem, List},
 };
+
+use crate::configuration::configuration::Configuration;
 
 pub struct ConfigurationNewtype<'a>(pub &'a Mutex<Configuration>);
 

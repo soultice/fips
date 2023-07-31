@@ -1,6 +1,6 @@
-use crate::cli::App;
-use crate::debug::PrintInfo;
 use crossterm::event::KeyCode;
+
+use crate::terminal_ui::{cli::App, debug::PrintInfo};
 
 pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     match code {

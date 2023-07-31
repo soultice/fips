@@ -1,10 +1,12 @@
-use serde::{Deserialize, Serialize};
-use crate::rule_collection::{CommonFunctions, default_as_true};
-use std::collections::HashMap;
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+
+use crate::{configuration::rule_collection::{default_as_true, RuleTransformingFunctions, apply_plugins, CommonFunctions}, plugin_registry::ExternalFunctions};
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct STATIC {
+pub struct MOCK {
     pub name: Option<String>,
     pub path: String,
     #[serde(rename = "matchProbability")]
@@ -18,12 +20,21 @@ pub struct STATIC {
     pub sleep: Option<u64>,
     #[serde(default = "default_as_true")]
     pub active: bool,
+    #[serde(rename = "responseStatus")]
+    pub response_status: Option<u16>,
+    #[serde(rename = "forwardUri")]
     pub headers: Option<HashMap<String, String>>,
-    #[serde(rename = "staticBaseDir")]
-    pub static_base_dir: String,
+    pub body: Option<Value>,
+}
+impl RuleTransformingFunctions for MOCK {
+    fn apply_plugins(&mut self, template: &ExternalFunctions) {
+        if let Some(body) = &mut self.body {
+            apply_plugins(body, template);
+        }
+    }
 }
 
-impl CommonFunctions for STATIC {
+impl CommonFunctions for MOCK {
     fn get_name(&self) -> Option<String> {
         self.name.clone()
     }
@@ -76,4 +87,3 @@ impl CommonFunctions for STATIC {
         self.active = false;
     }
 }
-

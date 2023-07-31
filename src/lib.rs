@@ -1,5 +1,3 @@
-pub use fips_plugin_registry::{PluginRegistrar, PluginDeclaration, InvocationError, Function};
-
 #[macro_export]
 macro_rules! export_plugin {
     ($register:expr) => {

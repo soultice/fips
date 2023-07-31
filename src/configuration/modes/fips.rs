@@ -1,14 +1,13 @@
-use crate::rule_collection::{
-    apply_plugins, default_as_true, CommonFunctions, RuleTransformingFunctions,
-};
-use fips_plugin_registry::plugin::ExternalFunctions;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::HashMap;
+use std::{ collections::HashMap };
+use hyper::Uri;
+use std::str::{FromStr};
+use schemars::JsonSchema;
+
+use crate::{configuration::{rule_collection::{default_as_true, RuleTransformingFunctions, apply_plugins, ProxyFunctions, RuleCollectionError, CommonFunctions}, rule::Rule}, plugin_registry::ExternalFunctions};
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct MOCK {
+pub struct FIPS {
     pub name: Option<String>,
     pub path: String,
     #[serde(rename = "matchProbability")]
@@ -17,6 +16,8 @@ pub struct MOCK {
     pub match_body_contains: Option<String>,
     #[serde(rename = "matchMethods")]
     pub match_methods: Option<Vec<String>>,
+    #[serde(rename = "serveStatic")]
+    pub serve_static: Option<String>,
     #[serde(skip)]
     pub selected: bool,
     pub sleep: Option<u64>,
@@ -25,18 +26,46 @@ pub struct MOCK {
     #[serde(rename = "responseStatus")]
     pub response_status: Option<u16>,
     #[serde(rename = "forwardUri")]
+    pub forward_uri: String,
+    #[serde(rename = "forwardHeaders")]
+    pub forward_headers: Option<Vec<String>>,
+    #[serde(rename = "backwardHeaders")]
+    pub backward_headers: Option<Vec<String>>,
     pub headers: Option<HashMap<String, String>>,
-    pub body: Option<Value>,
+    pub rules: Option<Vec<Rule>>,
 }
-impl RuleTransformingFunctions for MOCK {
+
+impl RuleTransformingFunctions for FIPS {
     fn apply_plugins(&mut self, template: &ExternalFunctions) {
-        if let Some(body) = &mut self.body {
-            apply_plugins(body, template);
+        if let Some(rules) = &mut self.rules {
+            for rule in rules {
+                if let Some(item) = &mut rule.item {
+                    apply_plugins(item, template);
+                }
+            }
         }
     }
 }
 
-impl CommonFunctions for MOCK {
+impl ProxyFunctions for FIPS {
+    fn get_forward_uri(&self) -> String {
+        self.forward_uri.clone()
+    }
+
+    fn get_forward_headers(&self) -> Option<Vec<String>> {
+        self.forward_headers.clone()
+    }
+
+    fn get_backward_headers(&self) -> Option<Vec<String>> {
+        self.backward_headers.clone()
+    }
+
+    fn form_forward_path(&self, uri: &Uri) -> Result<Uri, RuleCollectionError> {
+        Ok(Uri::from_str(&format!("{}{uri}", self.get_forward_uri()))?)
+    }
+}
+
+impl CommonFunctions for FIPS {
     fn get_name(&self) -> Option<String> {
         self.name.clone()
     }

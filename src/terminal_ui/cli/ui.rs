@@ -1,6 +1,3 @@
-use crate::cli::state::State;
-use crate::cli::App;
-use crate::debug::{PrintInfo, LoggableNT};
 use colorgrad;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -13,7 +10,9 @@ use gradient_tui_fork::{
     widgets::{Block, Borders, List, Paragraph, Tabs, Wrap},
     Frame,
 };
-use super::config_newtype::ConfigurationNewtype;
+use crate::terminal_ui::debug::{PrintInfo, LoggableNT};
+
+use super::{config_newtype::ConfigurationNewtype, App, state::State};
 use super::gradient_newtype::NewGradient;
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {

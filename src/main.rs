@@ -3,19 +3,24 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use fips_plugin_registry::ExternalFunctions;
 use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use clap::Parser;
 use std::fs::File;
 
-use fips_configuration::rule_collection::RuleCollection;
-use fips_configuration::configuration::Configuration;
-use fips_utility::{log::Loggable, options::CliOptions};
-
 mod client;
 mod fips;
 mod backend;
+mod configuration;
+mod utility;
+mod plugin_registry;
+mod terminal_ui;
+
+use crate::utility::log::Loggable;
+use crate::utility::options::CliOptions;
+use crate::configuration::rule_collection::RuleCollection;
+use crate::plugin_registry::ExternalFunctions;
+use crate::configuration::configuration::Configuration;
 
 #[cfg(feature = "logging")]
 mod logging;

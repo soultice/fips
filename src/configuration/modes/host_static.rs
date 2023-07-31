@@ -1,14 +1,13 @@
-use crate::rule_collection::{CommonFunctions, ProxyFunctions, RuleCollectionError, default_as_true};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::str::{FromStr};
-use hyper::Uri;
 use schemars::JsonSchema;
 
+use crate::configuration::rule_collection::{default_as_true, CommonFunctions};
+
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct PROXY {
-    pub path: String,
+pub struct STATIC {
     pub name: Option<String>,
+    pub path: String,
     #[serde(rename = "matchProbability")]
     pub match_with_prob: Option<f32>,
     #[serde(rename = "matchBodyContains")]
@@ -20,34 +19,12 @@ pub struct PROXY {
     pub sleep: Option<u64>,
     #[serde(default = "default_as_true")]
     pub active: bool,
-    #[serde(rename = "forwardUri")]
-    pub forward_uri: String,
-    #[serde(rename = "forwardHeaders")]
-    pub forward_headers: Option<Vec<String>>,
-    #[serde(rename = "backwardHeaders")]
-    pub backward_headers: Option<Vec<String>>,
     pub headers: Option<HashMap<String, String>>,
+    #[serde(rename = "staticBaseDir")]
+    pub static_base_dir: String,
 }
 
-impl ProxyFunctions for PROXY {
-    fn get_forward_uri(&self) -> String {
-        self.forward_uri.clone()
-    }
-
-    fn get_forward_headers(&self) -> Option<Vec<String>> {
-        self.forward_headers.clone()
-    }
-
-    fn get_backward_headers(&self) -> Option<Vec<String>> {
-        self.backward_headers.clone()
-    }
-
-    fn form_forward_path(&self, uri: &Uri) -> Result<Uri, RuleCollectionError> {
-        Ok(Uri::from_str(&format!("{}{uri}", self.get_forward_uri()))?)
-    }
-}
-
-impl CommonFunctions for PROXY {
+impl CommonFunctions for STATIC {
     fn get_name(&self) -> Option<String> {
         self.name.clone()
     }

@@ -1,8 +1,9 @@
-use fips_utility::options::CliOptions;
-use crate::cli::state::State;
-use crate::util::TabsState;
 use gradient_tui_fork::gradient::BorderGradients;
 use std::sync::Arc;
+
+use crate::{utility::options::CliOptions, terminal_ui::util::TabsState};
+
+use super::state::State;
 
 const REQUEST_TAB_NAME: &str = "Requests";
 const TRAFFIC_TAB_NAME: &str = "Traffic";

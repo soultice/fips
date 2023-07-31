@@ -1,10 +1,4 @@
-use crate::modes::fips::FIPS;
-use crate::modes::host_static::STATIC;
-use crate::modes::mock::MOCK;
-use crate::modes::proxy::PROXY;
-
 use hyper::Uri;
-use fips_plugin_registry::plugin::ExternalFunctions;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -14,6 +8,10 @@ use std::{
 use schemars::JsonSchema;
 
 use thiserror::Error;
+
+use crate::plugin_registry::ExternalFunctions;
+
+use super::modes::{host_static::STATIC, mock::MOCK, proxy::PROXY, fips::FIPS};
 
 #[derive(Error, Debug)]
 pub enum RuleCollectionError {

@@ -1,4 +1,3 @@
-
 use super::rule_collection::RuleCollection;
 use hyper::Method;
 use rand::Rng;
@@ -7,6 +6,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::{error, fs, io};
+use lazy_static::lazy_static;
 
 type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 

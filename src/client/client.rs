@@ -1,10 +1,13 @@
 use crate::PaintLogsCallbacks;
+use crate::utility::log::Loggable;
+use crate::utility::log::LoggableType;
+use crate::utility::log::RequestInfo;
+use crate::utility::log::ResponseInfo;
 use hyper::body::Buf;
 use hyper::body::Bytes;
 use hyper::{header::HeaderName, http::response::Parts, Body, Client, Method, Uri};
 use std::error::Error;
 use std::str::FromStr;
-use fips_utility::log::{ RequestInfo, Loggable, LoggableType, ResponseInfo };
 
 #[derive(Debug)]
 pub struct AppClient<'a> {

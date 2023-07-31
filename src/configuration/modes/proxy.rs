@@ -1,38 +1,26 @@
-use fips_plugin_registry::plugin::ExternalFunctions;
-
-use crate::rule_collection::{
-    CommonFunctions, ProxyFunctions, RuleCollectionError,
-    RuleTransformingFunctions,
-    apply_plugins,
-    default_as_true,
-};
-use crate::rule::Rule;
-
 use serde::{Deserialize, Serialize};
-use std::{ collections::HashMap };
-use hyper::Uri;
+use std::collections::HashMap;
 use std::str::{FromStr};
+use hyper::Uri;
 use schemars::JsonSchema;
 
+use crate::configuration::rule_collection::{default_as_true, ProxyFunctions, RuleCollectionError, CommonFunctions};
+
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct FIPS {
-    pub name: Option<String>,
+pub struct PROXY {
     pub path: String,
+    pub name: Option<String>,
     #[serde(rename = "matchProbability")]
     pub match_with_prob: Option<f32>,
     #[serde(rename = "matchBodyContains")]
     pub match_body_contains: Option<String>,
     #[serde(rename = "matchMethods")]
     pub match_methods: Option<Vec<String>>,
-    #[serde(rename = "serveStatic")]
-    pub serve_static: Option<String>,
     #[serde(skip)]
     pub selected: bool,
     pub sleep: Option<u64>,
     #[serde(default = "default_as_true")]
     pub active: bool,
-    #[serde(rename = "responseStatus")]
-    pub response_status: Option<u16>,
     #[serde(rename = "forwardUri")]
     pub forward_uri: String,
     #[serde(rename = "forwardHeaders")]
@@ -40,22 +28,9 @@ pub struct FIPS {
     #[serde(rename = "backwardHeaders")]
     pub backward_headers: Option<Vec<String>>,
     pub headers: Option<HashMap<String, String>>,
-    pub rules: Option<Vec<Rule>>,
 }
 
-impl RuleTransformingFunctions for FIPS {
-    fn apply_plugins(&mut self, template: &ExternalFunctions) {
-        if let Some(rules) = &mut self.rules {
-            for rule in rules {
-                if let Some(item) = &mut rule.item {
-                    apply_plugins(item, template);
-                }
-            }
-        }
-    }
-}
-
-impl ProxyFunctions for FIPS {
+impl ProxyFunctions for PROXY {
     fn get_forward_uri(&self) -> String {
         self.forward_uri.clone()
     }
@@ -73,7 +48,7 @@ impl ProxyFunctions for FIPS {
     }
 }
 
-impl CommonFunctions for FIPS {
+impl CommonFunctions for PROXY {
     fn get_name(&self) -> Option<String> {
         self.name.clone()
     }
@@ -126,3 +101,4 @@ impl CommonFunctions for FIPS {
         self.active = false;
     }
 }
+

@@ -1,23 +1,21 @@
 use crate::client::AppClient;
 use crate::PaintLogsCallbacks;
-use fips_configuration::{
-    rule::Rule,
-    rule_collection::{ProxyFunctions, RuleCollection, RuleTransformingFunctions},
-};
+use crate::configuration::rule::Rule;
+use crate::configuration::rule_collection::{RuleCollection, ProxyFunctions, RuleTransformingFunctions};
+use crate::plugin_registry::ExternalFunctions;
+use crate::utility::log::{Loggable, LoggableType};
 use hyper::body::Bytes;
 use hyper::header::HeaderValue;
 use hyper::http::header::HeaderName;
 use hyper::http::request::Parts;
 use hyper::{Body, Method, Response, StatusCode, Uri};
 use json_dotpath::DotPaths;
-use fips_plugin_registry::ExternalFunctions;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
-use fips_utility::log::{Loggable, LoggableType};
 
 struct Fips;
 

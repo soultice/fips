@@ -1,7 +1,8 @@
 use hyper::{Body, Request};
 use std::collections::HashMap;
 use gradient_tui_fork::text::Text;
-use fips_utility::log::RequestInfo;
+
+use crate::utility::log::RequestInfo;
 
 pub struct RequestInfoNT(pub RequestInfo);
 

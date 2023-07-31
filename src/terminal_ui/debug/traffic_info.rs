@@ -1,8 +1,9 @@
+use crate::utility::log::LoggableType;
+
 use super::request_info::RequestInfoNT;
 use super::response_info::ResponseInfoNT;
 use std::fmt;
 use gradient_tui_fork::text::Text;
-use fips_utility::log::LoggableType;
 
 #[derive(Debug, Clone)]
 pub struct LoggableNT(pub LoggableType);
