@@ -1,6 +1,5 @@
+use crate::terminal_ui::debug::{LoggableNT, PrintInfo};
 use colorgrad;
-use std::convert::TryFrom;
-use std::sync::Arc;
 use gradient_tui_fork::{
     backend::Backend,
     gradient::BorderGradients,
@@ -10,10 +9,11 @@ use gradient_tui_fork::{
     widgets::{Block, Borders, List, Paragraph, Tabs, Wrap},
     Frame,
 };
-use crate::terminal_ui::debug::{PrintInfo, LoggableNT};
+use std::convert::TryFrom;
+use std::sync::Arc;
 
-use super::{config_newtype::ConfigurationNewtype, App, state::State};
 use super::gradient_newtype::NewGradient;
+use super::{config_newtype::ConfigurationNewtype, state::State, App};
 
 pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     let app_title = format!(
@@ -76,14 +76,9 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         })
         .collect();
 
-    let loaded_plugins_info: Vec<Spans> = app
-        .state
-        .plugins
-        .lock()
-        .unwrap()
-        .keys()
-        .map(|e| Spans::from(Span::from(e.clone())))
-        .collect();
+    //TODO: display new plugins
+    let loaded_plugins_info: Vec<Spans> =
+        vec![Spans::from(String::from("No plugins loaded"))];
 
     f.render_widget(tabs, chunks[0]);
 
@@ -152,10 +147,7 @@ where
 {
     let response_info: Vec<LoggableNT> = state.traffic_info.lock().unwrap().to_vec();
 
-    let text: Vec<Text> = response_info
-        .iter()
-        .map(Text::from)
-        .collect();
+    let text: Vec<Text> = response_info.iter().map(Text::from).collect();
 
     let constraints: Vec<Constraint> = text
         .iter()

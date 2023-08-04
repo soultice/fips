@@ -9,6 +9,8 @@ pub struct CliOptions {
     /// The directory from where to load config files
     #[clap(short, long, default_value = ".")]
     pub config: PathBuf,
+    #[clap(short, long, default_value = ".")]
+    pub nconfig: Vec<PathBuf>,
     /// The directory from where to load plugins
     #[clap(long, default_value = ".")]
     pub plugins: PathBuf,

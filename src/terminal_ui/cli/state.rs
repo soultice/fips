@@ -1,13 +1,13 @@
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use crate::{terminal_ui::debug::{PrintInfo, LoggableNT}, plugin_registry::ExternalFunctions, configuration::configuration::Configuration};
+use crate::{
+    configuration::{configuration::Configuration, nconfiguration::NConfiguration},
+    terminal_ui::debug::{LoggableNT, PrintInfo},
+};
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,
-    pub plugins: Arc<Mutex<ExternalFunctions>>,
-    pub configuration: Arc<Mutex<Configuration>>,
+    pub configuration: Arc<Mutex<NConfiguration>>,
     pub traffic_info: Mutex<Vec<LoggableNT>>,
 }
 

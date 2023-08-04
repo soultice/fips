@@ -8,7 +8,7 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            app.state.configuration.lock().unwrap().reload()?;
+            //app.state.configuration.lock().unwrap().reload()?;
             app.state
                 .add_message(PrintInfo::PLAIN(String::from("Config files reloaded")))
                 .unwrap_or_default();
@@ -22,7 +22,7 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
         KeyCode::Tab => app.on_right(),
         KeyCode::Enter => {
             if app.tabs.index == 2 {
-                app.state.configuration.lock().unwrap().toggle_rule()
+                //TODO app.state.configuration.lock().unwrap().toggle_rule()
             }
         }
         KeyCode::Down => {
@@ -30,7 +30,7 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
                 app.state.configuration.lock().unwrap().select_next()
             }
         }
-        KeyCode::Up => app.state.configuration.lock().unwrap().select_prev(),
+        KeyCode::Up => app.state.configuration.lock().unwrap().select_previous(),
         _ => {}
     }
     Ok(())

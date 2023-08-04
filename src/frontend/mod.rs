@@ -16,7 +16,7 @@ enum Event<I> {
     Tick,
 }
 
-use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, plugin_registry::ExternalFunctions, configuration::configuration::Configuration, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
+use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, plugin_registry::ExternalFunctions, configuration::{configuration::Configuration, nconfiguration::NConfiguration}, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
 use log::info;
 use std::panic;
 use std::sync::{Arc, Mutex};
@@ -140,8 +140,7 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
 }
 
 pub fn setup(
-    plugins: Arc<Mutex<ExternalFunctions>>,
-    configuration: Arc<Mutex<Configuration>>,
+    configuration: Arc<Mutex<NConfiguration>>,
     options: CliOptions,
 ) -> (
     Option<Arc<State>>,
@@ -150,7 +149,6 @@ pub fn setup(
 ) {
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
-        plugins,
         configuration,
         traffic_info: Mutex::new(vec![]),
     });

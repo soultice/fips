@@ -1,0 +1,41 @@
+- Rule:
+    name: "Rule 1"
+    when:
+      matchesUris:
+        - uri: /test
+    then:
+      functionAs: "Proxy"
+      forwardUri: "http://localhost:8000"
+      modifyRequest: 
+        keepHeaders:
+          - "Content-Type"
+      modifyResponse: 
+        keepHeaders:
+          - "Content-Type"
+
+    with:
+      plugins:
+        - path: './plugins/'
+
+- Rule:
+    name: "Rule 2"
+    when:
+      matchesUris:
+        - uri: /test
+    then:
+      functionAs: "Proxy"
+      forwardUri: "http://localhost:8000"
+      modifyRequest: 
+        keepHeaders:
+          - "Content-Type"
+      modifyResponse: 
+        keepHeaders:
+          - "Content-Type"
+
+    with:
+      plugins:
+        - path: './plugins/'
+  
+
+
+  

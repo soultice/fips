@@ -1,39 +1,41 @@
-use std::sync::Mutex;
 use gradient_tui_fork::{
     style::{Color, Modifier, Style},
-    text::{Spans},
-    widgets::{ListItem, List},
+    text::Spans,
+    widgets::{List, ListItem},
 };
+use std::sync::Mutex;
 
-use crate::configuration::configuration::Configuration;
+use crate::configuration::nconfiguration::NConfiguration;
 
-pub struct ConfigurationNewtype<'a>(pub &'a Mutex<Configuration>);
+pub struct ConfigurationNewtype<'a>(pub &'a Mutex<NConfiguration>);
 
 impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
     fn from(wrapper: ConfigurationNewtype) -> List<'a> {
         let configuration = wrapper.0.lock().unwrap().clone();
         let items: Vec<ListItem> = configuration
-            .rule_collection
+            .rules
             .iter()
             .map(|c| {
                 let mut lines: Vec<Spans> = vec![];
-                if let Some(rule_name) = c.get_name().clone() {
-                    lines.extend(vec![Spans::from(format!(
-                        "name: {} --- path: {}",
-                        rule_name, c.get_path()
-                    ))]);
-                } else {
-                    lines.extend(vec![Spans::from(format!("path: {}", c.get_path().clone()))]);
+                match c {
+                    crate::configuration::nconfiguration::RuleSet::Rule(r) => {
+                        lines.extend(vec![Spans::from(format!(
+                            "name: {} --- path: {}",
+                            r.name,
+                            "PATH NOT IMPLEMENTED" 
+                        ))]);
+                    }
+                    _ => {}
                 }
-                let bg = match c.get_selected() {
+                let bg = match true {
                     true => Color::Reset,
                     false => Color::Reset,
                 };
-                let fg = match c.get_active() {
+                let fg = match true {
                     true => Color::Blue,
                     false => Color::DarkGray,
                 };
-                let modifier = match c.get_selected() {
+                let modifier = match true {
                     true => Modifier::UNDERLINED,
                     false => Modifier::DIM,
                 };

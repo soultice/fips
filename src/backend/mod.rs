@@ -9,11 +9,11 @@ use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use crate::Configuration;
+use crate::{Configuration, configuration::nconfiguration::NConfiguration};
 use crate::ExternalFunctions;
 
 #[cfg(not(feature = "ui"))]
-use utility::log::Loggable;
+use fips_utility::log::Loggable;
 #[cfg(not(feature = "ui"))]
 use std::marker::PhantomData;
 #[cfg(not(feature = "ui"))]
@@ -22,7 +22,7 @@ use std::any::Any;
 use log::info;
 
 pub fn spawn_backend(
-    configuration: &Arc<Mutex<Configuration>>,
+    configuration: &Arc<Mutex<NConfiguration>>,
     plugins: &Arc<Mutex<ExternalFunctions>>,
     addr: &SocketAddr,
     logger: &Arc<PaintLogsCallbacks>,
@@ -45,7 +45,6 @@ pub fn spawn_backend(
                 fips::routes(
                     req,
                     innermost_configuration,
-                    innermost_plugins,
                     &innermost_logger,
                 )
                 .await

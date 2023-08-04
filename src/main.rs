@@ -1,9 +1,11 @@
+#![feature(async_fn_in_trait)]
 use std::alloc::System;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
 use std::sync::{Arc, Mutex};
+use configuration::nconfiguration::NConfiguration;
 use tokio::runtime::Runtime;
 use clap::Parser;
 use std::fs::File;
@@ -16,6 +18,7 @@ mod utility;
 mod plugin_registry;
 mod terminal_ui;
 
+use crate::configuration::nconfiguration::RuleSet;
 use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
 use crate::configuration::rule_collection::RuleCollection;
@@ -48,21 +51,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_options = CliOptions::parse();
 
     if cli_options.write_schema {
-        let schema = schemars::schema_for!(Vec<RuleCollection>);
+        let schema = schemars::schema_for!(Vec<RuleSet>);
         serde_json::to_writer(&File::create("fips-schema.json")?, &schema)?;
         //exit early
         return Ok(());
     };
 
     let plugins = Arc::new(Mutex::new(ExternalFunctions::new(&cli_options.plugins)));
+
     let configuration = Arc::new(Mutex::new(
-        Configuration::new(&cli_options.config).unwrap_or(Configuration::default()),
+        NConfiguration::load(&cli_options.nconfig).unwrap()
     ));
+    log::info!("new_configuration: {:?}", configuration);
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
         let (state, app, logging) =
-            { frontend::setup(plugins.clone(), configuration.clone(), cli_options.clone()) };
+            { frontend::setup(configuration.clone(), cli_options.clone()) };
         #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
             backend::setup()
