@@ -4,6 +4,20 @@
       matchesUris:
         - uri: /test
     then:
+      functionAs: "Mock"
+      body: "Hello World"
+      status: "200" 
+
+    with:
+      plugins:
+        - path: './plugins/'
+
+- Rule:
+    name: "Rule 2"
+    when:
+      matchesUris:
+        - uri: /test/blabla
+    then:
       functionAs: "Proxy"
       forwardUri: "http://localhost:8000"
       modifyRequest: 
@@ -18,24 +32,29 @@
         - path: './plugins/'
 
 - Rule:
-    name: "Rule 2"
+    name: "Static"
     when:
       matchesUris:
-        - uri: /test
+        - uri: ^/static.*
     then:
-      functionAs: "Proxy"
-      forwardUri: "http://localhost:8000"
-      modifyRequest: 
-        keepHeaders:
-          - "Content-Type"
-      modifyResponse: 
-        keepHeaders:
-          - "Content-Type"
+      functionAs: "Static"
+      staticPath: "/home/fpfings"
+    with: 
+      plugins:
+        - path: './plugins/' 
 
+- Rule:
+    name: "Mock"
+    when:
+      matchesUris:
+        - uri: ^/mock.*
+    then: 
+      functionAs: "Mock"
+      body: "Hello World"
+      status: "200"
     with:
       plugins:
         - path: './plugins/'
+      
   
-
-
   

@@ -27,22 +27,18 @@ pub async fn routes(
     let intermediary = Intermediary::async_from(req).await;
 
     let c  = intermediary.clone();
-    match (c.method, c.uri) {
-        (Some(m), Some(u)) => {
-            if u == "/favicon.ico" {
-                //early return for favicon
-                return Ok(Response::new(Body::default()));
-            }
-            if m == Method::OPTIONS {
-                let mut preflight = Response::new(Body::default());
-                add_cors_headers(preflight.headers_mut());
-                //early return for preflight
-                return Ok(preflight);
-            }
+    //TODO clean up adding cors, have rule that makes sense here
+    if let (Some(method), Some(uri)) = (&c.method, &c.uri) {
+        if method == Method::OPTIONS {
+            let mut resp = Response::new(Body::from(""));
+            add_cors_headers(resp.headers_mut());
+            return Ok(resp);
         }
-        _ => {}
+        if method == Method::OPTIONS && uri == "/favicon.ico" {
+            //early return for favicon
+            return Ok(Response::new(Body::default()));
+        }
     }
-
     // find first matching rule
     let config = configuration.lock().unwrap().clone();
     let matching_rule = config.rules.iter().find_map(|rule| match rule {
@@ -56,38 +52,45 @@ pub async fn routes(
         _ => None,
     });
 
-    if let Some(r) = matching_rule {
-        //add uri and route from configuration (enrich)
-        let holder = RuleAndIntermediaryHolder { rule: &r, intermediary: &intermediary };
+    log::info!("matching_rule: {:?}", matching_rule);
 
-        let request = hyper::Request::try_from(intermediary.clone());
+    if let Some(rule) = matching_rule {
+        //add uri and route from configuration (enrich)
+        let mut holder = RuleAndIntermediaryHolder { rule, intermediary: &intermediary };
+
+        log::info!("holder");
+        let request = hyper::Request::try_from(&holder);
+        log::info!("request: {:?}", request);
 
         // Rule is forwarding (Proxy/FIPS)
         let resp = if let Ok(request) = request {
 
             let client = Arc::new(Client::new());
-            // let resp = client.request(request).await?;
+            let resp = client.request(request).await?;
 
-/*             let responseinfo = ResponseInfo::from(&resp.unwrap());
+            let responseinfo = ResponseInfo::from(&resp);
             let log_output = Loggable {
                 message_type: LoggableType::OutGoingResponseFromFips(responseinfo),
                 message: "".to_owned(),
             };
-            (logging.0)(&log_output); */
-            //resp
-            let resp = Response::from(holder);
+            (logging.0)(&log_output);
+            let inter = Intermediary::async_from(resp).await;
+            holder.intermediary = &inter;
+            let resp = Response::async_from(holder).await;
+            log::info!("resp: {:?}", resp);
             Ok(resp)
         } else {
             // rule isnt forwarding
-            let resp = Response::from(holder);
+            let resp = Response::async_from(holder).await;
+            log::info!("resp: {:?}", resp);
             Ok(resp)
         };
 
-        if let Some(sleep_time_ms) = r.with.sleep {
+        if let Some(sleep_time_ms) = rule.with.sleep {
             tokio::time::sleep(tokio::time::Duration::from_millis(sleep_time_ms)).await;
         }
 
-        return resp;
+        resp
     } else {
         //TODO create this from intermediary
         let mut no_matching_rule = Response::new(Body::from("no matching rule found"));
@@ -101,7 +104,7 @@ pub async fn routes(
             ),
             message_type: LoggableType::Plain,
         });
-        return Ok(no_matching_rule);
+        Ok(no_matching_rule)
     }
 }
 

@@ -8,6 +8,7 @@ use http::{
     Extensions, HeaderMap, HeaderValue, Method, StatusCode, Uri,
 };
 use hyper::{Body, Request, Response};
+use json_dotpath::DotPaths;
 use lazy_static::lazy_static;
 use rand::Rng;
 use regex::RegexSet;
@@ -90,12 +91,21 @@ pub struct ModifyRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ModifyResponse {
+pub struct ModifyResponseFips {
     #[serde(rename = "setHeaders")]
     add_headers: Option<HashMap<String, String>>,
     #[serde(rename = "keepHeaders")]
-    keep_headers: Option<Vec<String>>,
+    delete_headers: Option<Vec<String>>,
     body: Option<Vec<BodyManipulation>>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ModifyResponseProxy {
+    #[serde(rename = "setHeaders")]
+    add_headers: Option<HashMap<String, String>>,
+    #[serde(rename = "keepHeaders")]
+    delete_headers: Option<Vec<String>>,
     status: Option<String>,
 }
 
@@ -127,21 +137,21 @@ pub enum Then {
         #[serde(rename = "forwardUri")]
         forward_uri: String,
         #[serde(rename = "modifyResponse")]
-        modify_response: Option<ModifyResponse>,
-        status: Option<String>,
+        modify_response: Option<ModifyResponseFips>,
     },
     Proxy {
         #[serde(rename = "forwardUri")]
         forward_uri: String,
-        status: Option<String>,
+        modify_response: Option<ModifyResponseProxy>,
     },
     Static {
-        #[serde(rename = "staticPath")]
-        static_path: Option<String>,
+        #[serde(rename = "baseDir")]
+        static_base_dir: Option<String>,
     },
     Mock {
         body: Option<String>,
         status: Option<String>,
+        headers: Option<HashMap<String, String>>,
     },
 }
 
@@ -185,26 +195,23 @@ impl Rule {
             return false;
         }
 
-        let some_methods_match = self
-            .when
-            .matches_methods
-            .as_ref()
-            .map(|methods| {
+        let some_methods_match =
+            self.when.matches_methods.as_ref().map_or(true, |methods| {
                 methods
                     .iter()
                     .any(|m| m == intermediary.clone().method.unwrap().as_str())
-            })
-            .unwrap_or(true);
+            });
         if !some_methods_match {
             return false;
         }
 
-        let some_body_contains = self
-            .when
-            .body_contains
-            .as_ref()
-            .map(|body_contains| intermediary.body.as_str().unwrap().contains(body_contains))
-            .unwrap_or(false);
+        let some_body_contains =
+            self.when
+                .body_contains
+                .as_ref()
+                .map_or(true, |body_contains| {
+                    intermediary.body.as_str().unwrap().contains(body_contains)
+                });
         if !some_body_contains {
             return false;
         }
@@ -234,7 +241,9 @@ pub struct NConfiguration {
 }
 
 impl NConfiguration {
-    pub fn load(paths: &Vec<PathBuf>) -> Result<NConfiguration, DeserializationError> {
+    pub fn load(
+        paths: &Vec<PathBuf>,
+    ) -> Result<NConfiguration, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
         let rules = loader.load_from_directories::<RuleSet>(paths)?;
@@ -246,12 +255,14 @@ impl NConfiguration {
     }
 
     pub fn select_next(&mut self) {
-        self.selected_rule = (self.selected_rule + 1) % self.active_rule_indices.len();
+        self.selected_rule =
+            (self.selected_rule + 1) % self.active_rule_indices.len();
     }
 
     pub fn select_previous(&mut self) {
-        self.selected_rule = (self.selected_rule + self.active_rule_indices.len() - 1)
-            % self.active_rule_indices.len();
+        self.selected_rule =
+            (self.selected_rule + self.active_rule_indices.len() - 1)
+                % self.active_rule_indices.len();
     }
 
     pub fn remove_from_active_indices(&mut self) {
@@ -280,14 +291,17 @@ pub trait AsyncFrom<T> {
 impl AsyncFrom<hyper::Response<hyper::Body>> for Intermediary {
     type Output = Intermediary;
 
-    async fn async_from(response: hyper::Response<hyper::Body>) -> Intermediary {
+    async fn async_from(
+        response: hyper::Response<hyper::Body>,
+    ) -> Intermediary {
         let status = response.status();
         let mut headers = response.headers().clone();
         headers.remove("content-length");
 
         let body = response.into_body();
         let body = hyper::body::aggregate(body).await.unwrap().reader();
-        let resp_json: serde_json::Value = serde_json::from_reader(body).unwrap_or_default();
+        let resp_json: serde_json::Value =
+            serde_json::from_reader(body).unwrap_or_default();
         Intermediary {
             status,
             headers,
@@ -306,7 +320,8 @@ impl AsyncFrom<hyper::Request<hyper::Body>> for Intermediary {
         let headers = request.headers().clone();
         let body = request.into_body();
         let body = hyper::body::aggregate(body).await.unwrap().reader();
-        let req_json: serde_json::Value = serde_json::from_reader(body).unwrap_or_default();
+        let req_json: serde_json::Value =
+            serde_json::from_reader(body).unwrap_or_default();
         Intermediary {
             status: StatusCode::OK,
             headers,
@@ -317,9 +332,23 @@ impl AsyncFrom<hyper::Request<hyper::Body>> for Intermediary {
     }
 }
 
+impl From<Intermediary> for hyper::Response<hyper::Body> {
+    fn from(intermediary: Intermediary) -> Self {
+        let mut builder = Response::builder();
+        builder = builder.status(intermediary.status);
+        for (key, value) in intermediary.headers.iter() {
+            builder = builder.header(key, value);
+        }
+        let body = serde_json::to_string(&intermediary.body).unwrap();
+        builder.body(Body::from(body)).unwrap()
+    }
+}
+
 impl TryFrom<Intermediary> for hyper::Request<hyper::Body> {
     type Error = ConfigurationError;
-    fn try_from(intermediary: Intermediary) -> Result<Self, ConfigurationError> {
+    fn try_from(
+        intermediary: Intermediary,
+    ) -> Result<Self, ConfigurationError> {
         let mut builder = Request::builder();
         if let Some(method) = intermediary.method {
             builder = builder.method(method);
@@ -343,76 +372,57 @@ pub struct RuleAndIntermediaryHolder<'a> {
     pub intermediary: &'a Intermediary,
 }
 
-impl TryFrom<RuleAndIntermediaryHolder<'_>> for Request<Body> {
+//convert from holder to hyper request
+impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
     type Error = ConfigurationError;
 
-    fn try_from(holder: RuleAndIntermediaryHolder) -> Result<Self, ConfigurationError> {
-        let header_iter = holder.intermediary.headers.iter().map(|(key, value)| {
-            let key = HeaderName::from(key);
-            let value = HeaderValue::from(value);
-            (key, value)
-        });
-        let header_map: HeaderMap<HeaderValue> = HeaderMap::from_iter(header_iter);
-        let uri = match &holder.rule.then {
+    fn try_from(
+        holder: &RuleAndIntermediaryHolder,
+    ) -> Result<Self, ConfigurationError> {
+        let mut builder = holder
+            .intermediary
+            .headers
+            .iter()
+            .fold(Request::builder(), |builder, (key, value)| {
+                builder.header(key, value)
+            });
+        match &holder.rule.then {
             Then::Fips {
                 forward_uri,
-                modify_response,
-                status,
-            } => Ok(Uri::from_str(forward_uri)?),
+                modify_response: _,
+            } => {
+                builder = builder.uri(Uri::from_str(forward_uri)?);
+            }
             Then::Proxy {
                 forward_uri,
-                status,
-            } => Ok(Uri::from_str(forward_uri)?),
-            Then::Static { static_path } => Err(ConfigurationError::NotForwarding),
-            Then::Mock { body, status } => Err(ConfigurationError::NotForwarding),
+                modify_response,
+            } => {
+                builder = builder.uri(Uri::from_str(forward_uri)?);
+            }
+            Then::Static { static_base_dir } => {
+                //TODO hyper_staticfile::resolve(&static_base_dir, holder.intermediary.uri.as_ref().unwrap())
+                return Err(ConfigurationError::NotForwarding);
+            }
+            Then::Mock {
+                body: _,
+                status: _,
+                headers: _,
+            } => return Err(ConfigurationError::NotForwarding),
         };
-        let request = Request::builder();
-        Ok(request
-            .uri(uri?)
-            .method("GET")
-            .body(Body::default())
+        builder = builder.method(holder.intermediary.method.clone().unwrap());
+        Ok(builder
+            .body(Body::from(holder.intermediary.body.to_string()))
             .unwrap())
     }
 }
 
 // convert to response
-impl From<RuleAndIntermediaryHolder<'_>> for Response<Body> {
-    fn from(holder: RuleAndIntermediaryHolder) -> Self {
-        //TODO: apply transformations from rule
+impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
+    type Output = Response<Body>;
+    async fn async_from(holder: RuleAndIntermediaryHolder<'_>) -> Self {
+        //TODO: apply plugins
 
-        let status = match &holder.rule.then {
-            //plugins/transformation/status/headers
-            Then::Fips {
-                forward_uri,
-                modify_response,
-                status,
-            } => {
-                if let Some(modify) = modify_response {
-                    match &modify.status {
-                        Some(status) => hyper::StatusCode::from_str(&status).unwrap(),
-                        None => hyper::StatusCode::OK,
-                    }
-                } else {
-                    hyper::StatusCode::OK
-                }
-            }
-            //plugins/headers/status
-            Then::Mock { body, status } => {
-                if let Some(status) = status {
-                    hyper::StatusCode::from_str(&status).unwrap()
-                } else {
-                    hyper::StatusCode::OK
-                }
-            }
-            //TODO body
-            //headers
-            Then::Proxy {
-                forward_uri,
-                status,
-            } => todo!(),
-            //nothing
-            Then::Static { static_path } => todo!(),
-        };
+        let mut preemtive_body = String::new();
 
         let mut builder = holder
             .intermediary
@@ -422,19 +432,104 @@ impl From<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 builder.header(key, value)
             });
 
-        for (key, value) in holder.intermediary.headers.iter() {
-            builder = builder.header(key, value);
-        }
+        match &holder.rule.then {
+            //plugins/transformation/status/headers
+            //TODO plugins
+            Then::Fips {
+                forward_uri: _,
+                modify_response,
+            } => {
+                if let Some(modify) = modify_response {
+                    if let Some(status) = &modify.status {
+                        builder = builder.status(
+                            hyper::StatusCode::from_str(status).unwrap(),
+                        );
+                    }
+
+                    //morph body
+                    if let Some(manipulator) = &modify.body {
+                        let mut body = holder.intermediary.body.clone();
+                        manipulator.iter().for_each(|m| {
+                            body.dot_set(&m.at, &m.with).unwrap();
+                        });
+                        preemtive_body = body.to_string();
+                    }
+
+                    if let Some(headers) = &modify.delete_headers {
+                        let headers_mut = builder.headers_mut().unwrap();
+                        for h in headers {
+                            if headers_mut.contains_key(h) {
+                                headers_mut.remove(h);
+                            }
+                        }
+                    }
+
+                    if let Some(add_headers) = &modify.add_headers {
+                        for (key, value) in add_headers.iter() {
+                            builder = builder.header(key, value);
+                        }
+                    }
+                }
+            }
+            //plugins/headers/status
+            Then::Mock {
+                body,
+                status,
+                headers,
+            } => {
+                if let Some(status) = status {
+                    builder = builder
+                        .status(hyper::StatusCode::from_str(status).unwrap());
+                } else {
+                    builder = builder.status(hyper::StatusCode::OK)
+                }
+
+                if let Some(body) = body {
+                    preemtive_body = body.clone();
+                }
+            }
+            //headers
+            Then::Proxy {
+                forward_uri,
+                modify_response,
+            } => {
+                return Response::from(holder.intermediary.clone());
+            }
+            //nothing
+            Then::Static { static_base_dir } => {
+                if let Some(path) = static_base_dir {
+                    builder = builder.header("x-static", path);
+
+                    let static_path = hyper_staticfile::resolve_path(
+                        path,
+                        holder.intermediary.uri.as_ref().unwrap(),
+                    )
+                    .await
+                    .unwrap();
+
+                    let resp = hyper_staticfile::ResponseBuilder::new()
+                        .request_parts(
+                            holder.intermediary.method.as_ref().unwrap(),
+                            &Uri::from_str(
+                                holder.intermediary.uri.as_ref().unwrap(),
+                            )
+                            .unwrap(),
+                            &HeaderMap::new(),
+                        )
+                        .build(static_path)
+                        .unwrap();
+                    return resp;
+                }
+                preemtive_body = holder.intermediary.body.to_string();
+            }
+        };
 
         // CORS headers are always added to response
         builder = builder.header("Access-Control-Allow-Origin", "*");
-        builder = builder.header("Access-Control-Allow-Methods", "*"); 
+        builder = builder.header("Access-Control-Allow-Methods", "*");
 
-        let body = serde_json::to_string(&holder.intermediary.body).unwrap();
-        let resp = Response::builder()
-            .status(status)
-            .body(Body::from(body))
-            .unwrap();
+        let resp = builder.body(Body::from(preemtive_body)).unwrap();
+        log::info!("response: {:?}", resp);
         resp
     }
 }

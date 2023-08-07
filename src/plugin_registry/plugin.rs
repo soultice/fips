@@ -1,12 +1,18 @@
-use libloading::Library;
 use super::{Function, InvocationError, PluginDeclaration};
+use libloading::Library;
+use schemars::JsonSchema;
+use serde::de::Visitor;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde_json::Value;
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::fmt;
+use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::{env, fs, io};
-use serde_json::Value;
 
 pub struct FunctionProxy {
     function: Box<dyn Function + Send>,
@@ -29,6 +35,14 @@ pub struct ExternalFunctions {
     libraries: Vec<Arc<Library>>,
 }
 
+impl Debug for ExternalFunctions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExternalFunctions")
+            .field("functions", &self.functions.keys())
+            .finish()
+    }
+}
+
 impl ExternalFunctions {
     pub fn new(path_to_plugins: &PathBuf) -> ExternalFunctions {
         let mut default = ExternalFunctions::default();
@@ -45,7 +59,10 @@ impl ExternalFunctions {
     /// [`plugins_core::plugin_declaration!()`] macro. Trying manually implement
     /// a plugin without going through that macro will result in undefined
     /// behaviour.
-    pub unsafe fn load<P: AsRef<OsStr>>(&mut self, library_path: P) -> io::Result<()> {
+    pub unsafe fn load<P: AsRef<OsStr>>(
+        &mut self,
+        library_path: P,
+    ) -> io::Result<()> {
         // load the library into memory
         let library = Arc::new(Library::new(library_path).unwrap()); //?);
 
@@ -82,15 +99,30 @@ impl ExternalFunctions {
         let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
             .filter_map(|res| match env::consts::OS {
                 "windows" => match res {
-                    Ok(e) if e.path().extension()? == "dll" || e.path().extension()? == "module" => Some(e.path()),
+                    Ok(e)
+                        if e.path().extension()? == "dll"
+                            || e.path().extension()? == "module" =>
+                    {
+                        Some(e.path())
+                    }
                     _ => None,
                 },
                 "macos" => match res {
-                    Ok(e) if e.path().extension()? == "dylib" || e.path().extension()? == "module" => Some(e.path()),
+                    Ok(e)
+                        if e.path().extension()? == "dylib"
+                            || e.path().extension()? == "module" =>
+                    {
+                        Some(e.path())
+                    }
                     _ => None,
-                }
+                },
                 _ => match res {
-                    Ok(e) if e.path().extension()? == "so" || e.path().extension()? == "module" => Some(e.path()),
+                    Ok(e)
+                        if e.path().extension()? == "so"
+                            || e.path().extension()? == "module" =>
+                    {
+                        Some(e.path())
+                    }
                     _ => None,
                 },
             })
@@ -106,7 +138,11 @@ impl ExternalFunctions {
         Ok(())
     }
 
-    pub fn call(&self, function: &str, arguments: Vec<Value>) -> Result<String, InvocationError> {
+    pub fn call(
+        &self,
+        function: &str,
+        arguments: Vec<Value>,
+    ) -> Result<String, InvocationError> {
         self.functions
             .get(function)
             .ok_or_else(|| format!("\"{function}\" not found"))?
@@ -137,7 +173,11 @@ impl PluginRegistrar {
 }
 
 impl super::PluginRegistrar for PluginRegistrar {
-    fn register_function(&mut self, name: &str, function: Box<dyn Function + Send>) {
+    fn register_function(
+        &mut self,
+        name: &str,
+        function: Box<dyn Function + Send>,
+    ) {
         let proxy = FunctionProxy {
             function,
             _lib: Arc::clone(&self.lib),
