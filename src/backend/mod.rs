@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use crate::{Configuration, configuration::nconfiguration::NConfiguration};
+use crate::{configuration::nconfiguration::NConfiguration};
 use crate::ExternalFunctions;
 
 #[cfg(not(feature = "ui"))]
@@ -37,7 +37,7 @@ pub fn spawn_backend(
         let inner_logger = capture_logger.clone();
 
         let responder = Box::new(move |req: Request<Body>| {
-            let innermost_plugins = inner_plugins.clone();
+            let _innermost_plugins = inner_plugins.clone();
             let innermost_configuration = inner_configuration.clone();
             let innermost_logger = inner_logger.clone();
 

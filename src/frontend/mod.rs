@@ -16,7 +16,7 @@ enum Event<I> {
     Tick,
 }
 
-use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, plugin_registry::ExternalFunctions, configuration::{configuration::Configuration, nconfiguration::NConfiguration}, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
+use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, configuration::{nconfiguration::NConfiguration}, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
 use log::info;
 use std::panic;
 use std::sync::{Arc, Mutex};

@@ -31,30 +31,6 @@
       plugins:
         - path: './plugins/'
 
-- Rule:
-    name: "Static"
-    when:
-      matchesUris:
-        - uri: ^/static.*
-    then:
-      functionAs: "Static"
-      staticPath: "/home/fpfings"
-    with: 
-      plugins:
-        - path: './plugins/' 
 
-- Rule:
-    name: "Mock"
-    when:
-      matchesUris:
-        - uri: ^/mock.*
-    then: 
-      functionAs: "Mock"
-      body: "Hello World"
-      status: "200"
-    with:
-      plugins:
-        - path: './plugins/'
-      
   
   

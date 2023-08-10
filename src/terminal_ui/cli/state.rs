@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    configuration::{configuration::Configuration, nconfiguration::NConfiguration},
+    configuration::{nconfiguration::NConfiguration},
     terminal_ui::debug::{LoggableNT, PrintInfo},
 };
 

@@ -21,9 +21,9 @@ mod terminal_ui;
 use crate::configuration::nconfiguration::RuleSet;
 use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
-use crate::configuration::rule_collection::RuleCollection;
+
 use crate::plugin_registry::ExternalFunctions;
-use crate::configuration::configuration::Configuration;
+
 
 #[cfg(feature = "logging")]
 mod logging;
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let plugins = Arc::new(Mutex::new(ExternalFunctions::new(&cli_options.plugins)));
 
     let configuration = Arc::new(Mutex::new(
-        NConfiguration::load(&cli_options.nconfig).unwrap()
+        NConfiguration::load(&cli_options.nconfig).unwrap_or_default()
     ));
     log::info!("new_configuration: {:?}", configuration);
 

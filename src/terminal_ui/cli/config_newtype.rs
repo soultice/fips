@@ -11,21 +11,20 @@ pub struct ConfigurationNewtype<'a>(pub &'a Mutex<NConfiguration>);
 
 impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
     fn from(wrapper: ConfigurationNewtype) -> List<'a> {
-        let configuration = wrapper.0.lock().unwrap().clone();
+        let configuration = wrapper.0.lock().unwrap();
         let items: Vec<ListItem> = configuration
             .rules
             .iter()
-            .map(|c| {
+            .enumerate()
+            .map(|(idx, c)| {
                 let mut lines: Vec<Spans> = vec![];
-                match c {
-                    crate::configuration::nconfiguration::RuleSet::Rule(r) => {
-                        lines.extend(vec![Spans::from(format!(
-                            "name: {} --- path: {}",
-                            r.name,
-                            "PATH NOT IMPLEMENTED" 
-                        ))]);
-                    }
-                    _ => {}
+                if let crate::configuration::nconfiguration::RuleSet::Rule(r) =
+                    c
+                {
+                    lines.extend(vec![Spans::from(format!(
+                        "name: {} --- path: {}",
+                        r.name, r.path
+                    ))]);
                 }
                 let bg = match true {
                     true => Color::Reset,
@@ -39,7 +38,9 @@ impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
                     true => Modifier::UNDERLINED,
                     false => Modifier::DIM,
                 };
-                ListItem::new(lines).style(Style::default().fg(fg).bg(bg).add_modifier(modifier))
+                ListItem::new(lines).style(
+                    Style::default().fg(fg).bg(bg).add_modifier(modifier),
+                )
             })
             .collect();
         List::new(items).style(Style::default())

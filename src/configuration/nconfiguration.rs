@@ -1,12 +1,5 @@
 use bytes::Buf;
-use futures::StreamExt;
-use http::{
-    header::{self, HeaderName},
-    method,
-    request::Parts,
-    response::Parts as ResponseParts,
-    Extensions, HeaderMap, HeaderValue, Method, StatusCode, Uri,
-};
+use http::{HeaderMap, Method, StatusCode, Uri, header::HeaderName, HeaderValue};
 use hyper::{Body, Request, Response};
 use json_dotpath::DotPaths;
 use lazy_static::lazy_static;
@@ -118,12 +111,15 @@ pub struct BodyManipulation {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Plugin {
     path: String,
+    //TODO implement Serialize / JSON Schema for external functions and load them directly during deserialize
+    /*     #[serde(skip)]
+    loaded: Option<ExternalFunctions>, */
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct When {
     #[serde(rename = "matchesUris")]
-    matches_uri: Vec<Match>,
+    matches: Vec<Match>,
     #[serde(rename = "matchesMethods")]
     matches_methods: Option<Vec<String>>,
     #[serde(rename = "bodyContains")]
@@ -172,7 +168,9 @@ pub struct Rule {
     pub name: String,
     pub when: When,
     pub then: Then,
-    pub with: With,
+    pub with: Option<With>,
+    #[serde(skip)]
+    pub path: String,
 }
 
 impl Rule {
@@ -181,7 +179,7 @@ impl Rule {
 
         let uri_regex = RegexSet::new(
             self.when
-                .matches_uri
+                .matches
                 .iter()
                 .map(|m| m.uri.as_str())
                 .collect::<Vec<&str>>(),
@@ -190,7 +188,7 @@ impl Rule {
 
         let uri = intermediary.clone().uri.unwrap();
 
-        let some_uris_match = uri_regex.is_match(&uri);
+        let some_uris_match = uri_regex.is_match(&uri.path().to_string());
         if !some_uris_match {
             return false;
         }
@@ -218,11 +216,16 @@ impl Rule {
 
         let probability_matches = self
             .with
-            .probability
             .as_ref()
+            .unwrap_or(&With {
+                probability: Some(1.0),
+                plugins: None,
+                sleep: None,
+            })
+            .probability
             .map(|probability| {
-                let random_number = rng.gen_range(0.0, 1.0);
-                random_number < *probability
+                let random_number = rng.gen_range(0.0, 0.99);
+                random_number < probability
             })
             .unwrap_or(true);
         if !probability_matches {
@@ -233,11 +236,38 @@ impl Rule {
     }
 }
 
-#[derive(Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Clone, Debug, JsonSchema)]
 pub struct NConfiguration {
     active_rule_indices: Vec<usize>,
-    selected_rule: usize,
+    fe_selected_rule: usize,
     pub rules: Vec<RuleSet>,
+}
+
+impl Default for NConfiguration {
+    fn default() -> Self {
+        NConfiguration {
+            active_rule_indices: vec![0],
+            fe_selected_rule: 0,
+            rules: vec![RuleSet::Rule(Rule {
+                name: String::from("Static fallback - no rules found or rules are defective"),
+                when: When {
+                    matches: vec![
+                        Match{
+                            uri: String::from(".*"),
+                            body: None,
+                        }
+                    ],
+                    matches_methods: None,
+                    body_contains: None,
+                },
+                then: Then::Static{
+                    static_base_dir: None,
+                },
+                with: None,
+                path: String::from(""),
+            })]
+        }
+    }
 }
 
 impl NConfiguration {
@@ -246,31 +276,50 @@ impl NConfiguration {
     ) -> Result<NConfiguration, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
-        let rules = loader.load_from_directories::<RuleSet>(paths)?;
+        let rules = loader.load_from_directories(paths)?;
+
+        //load plugins
+        /*         for rule in &rules {
+            match rule {
+                RuleSet::Rule(rule) => {
+                    if let Some(with) = &rule.with {
+                        if let Some(plugins) = &with.plugins {
+                            for plugin in plugins {
+                                let path = PathBuf::from(&plugin.path);
+                                let external_functions =
+                                    ExternalFunctions::new(path);
+                                plugin.loaded = Some(external_functions);
+                            }
+                        }
+                    }
+                }
+            }
+        } */
+
         Ok(NConfiguration {
             active_rule_indices: vec![0],
-            selected_rule: 0,
+            fe_selected_rule: 0,
             rules,
         })
     }
 
     pub fn select_next(&mut self) {
-        self.selected_rule =
-            (self.selected_rule + 1) % self.active_rule_indices.len();
+        self.fe_selected_rule =
+            (self.fe_selected_rule + 1) % self.active_rule_indices.len();
     }
 
     pub fn select_previous(&mut self) {
-        self.selected_rule =
-            (self.selected_rule + self.active_rule_indices.len() - 1)
+        self.fe_selected_rule =
+            (self.fe_selected_rule + self.active_rule_indices.len() - 1)
                 % self.active_rule_indices.len();
     }
 
     pub fn remove_from_active_indices(&mut self) {
-        self.active_rule_indices.remove(self.selected_rule);
+        self.active_rule_indices.remove(self.fe_selected_rule);
     }
 
     pub fn add_to_active_indices(&mut self) {
-        self.active_rule_indices.push(self.selected_rule);
+        self.active_rule_indices.push(self.fe_selected_rule);
     }
 }
 
@@ -280,7 +329,7 @@ pub struct Intermediary {
     pub headers: HeaderMap,
     pub body: serde_json::Value,
     pub method: Option<Method>,
-    pub uri: Option<String>,
+    pub uri: Option<Uri>,
 }
 
 pub trait AsyncFrom<T> {
@@ -316,7 +365,7 @@ impl AsyncFrom<hyper::Request<hyper::Body>> for Intermediary {
     type Output = Intermediary;
     async fn async_from(request: hyper::Request<hyper::Body>) -> Intermediary {
         let method = request.method().clone();
-        let uri = request.uri().to_string();
+        let uri = request.uri().clone();
         let headers = request.headers().clone();
         let body = request.into_body();
         let body = hyper::body::aggregate(body).await.unwrap().reader();
@@ -395,12 +444,11 @@ impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
             }
             Then::Proxy {
                 forward_uri,
-                modify_response,
+                modify_response: _,
             } => {
                 builder = builder.uri(Uri::from_str(forward_uri)?);
             }
-            Then::Static { static_base_dir } => {
-                //TODO hyper_staticfile::resolve(&static_base_dir, holder.intermediary.uri.as_ref().unwrap())
+            Then::Static { static_base_dir: _ } => {
                 return Err(ConfigurationError::NotForwarding);
             }
             Then::Mock {
@@ -475,7 +523,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             Then::Mock {
                 body,
                 status,
-                headers,
+                headers: _,
             } => {
                 if let Some(status) = status {
                     builder = builder
@@ -490,37 +538,54 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             }
             //headers
             Then::Proxy {
-                forward_uri,
+                forward_uri: _,
                 modify_response,
             } => {
+                if let Some(modify_response) = modify_response {
+                    if let Some(status) = &modify_response.status {
+                        builder = builder.status(
+                            hyper::StatusCode::from_str(status).unwrap(),
+                        );
+                    }
+                    if let Some(add_headers) = &modify_response.add_headers {
+                        for (key, value) in add_headers.iter() {
+                            builder = builder.header(key, value);
+                        }
+                    }
+                    if let Some(delete_headers) = &modify_response.delete_headers {
+                        for h in delete_headers {
+                            if builder.headers_mut().unwrap().contains_key(h) {
+                                builder.headers_mut().unwrap().remove(h);
+                            }
+                        }
+                    }
+                }
                 return Response::from(holder.intermediary.clone());
             }
             //nothing
             Then::Static { static_base_dir } => {
+                log::info!("static base dir: {:?}, uri: {}", static_base_dir, holder.intermediary.uri.as_ref().unwrap());
                 if let Some(path) = static_base_dir {
-                    builder = builder.header("x-static", path);
 
                     let static_path = hyper_staticfile::resolve_path(
                         path,
-                        holder.intermediary.uri.as_ref().unwrap(),
+                        holder.intermediary.uri.clone().unwrap().path(),
                     )
                     .await
                     .unwrap();
 
+                    let header_name = HeaderName::from_static("x-static");
+                    let header_value = HeaderValue::from_str(path).unwrap();
                     let resp = hyper_staticfile::ResponseBuilder::new()
                         .request_parts(
                             holder.intermediary.method.as_ref().unwrap(),
-                            &Uri::from_str(
-                                holder.intermediary.uri.as_ref().unwrap(),
-                            )
-                            .unwrap(),
-                            &HeaderMap::new(),
+                            &holder.intermediary.uri.clone().unwrap(),
+                            &HeaderMap::from_iter(vec![(header_name, header_value)]),
                         )
                         .build(static_path)
                         .unwrap();
                     return resp;
                 }
-                preemtive_body = holder.intermediary.body.to_string();
             }
         };
 
