@@ -1,3 +1,5 @@
+use std::sync::{Mutex, Arc};
+
 use crossterm::event::KeyCode;
 
 use crate::{terminal_ui::{cli::App, debug::PrintInfo}, configuration};
@@ -8,7 +10,7 @@ pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::e
             app.should_quit = true;
         }
         KeyCode::Char('r') => {
-            configuration::nconfiguration::NConfiguration::load(&app.opts.nconfig)?;
+            app.state.configuration.lock().unwrap().reload(&app.opts.nconfig)?;
             app.state
                 .add_message(PrintInfo::PLAIN(String::from("Config files reloaded")))
                 .unwrap_or_default();

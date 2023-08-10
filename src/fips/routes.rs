@@ -12,11 +12,12 @@ use hyper::{
     Body, Client, Method, Request, Response, StatusCode,
 };
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
 pub async fn routes(
     req: Request<Body>,
-    configuration: Arc<Mutex<NConfiguration>>,
+    configuration: Arc<AsyncMutex<NConfiguration>>,
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>, hyper::Error> {
     let requestinfo = RequestInfo::from(&req);
@@ -42,24 +43,29 @@ pub async fn routes(
         }
     }
     // find first matching rule
-    let config = configuration.lock().unwrap().clone();
-    let matching_rule = config.rules.iter().find_map(|rule| match rule {
+    let config = configuration.lock().await;
+    let matching_rule_idx = config.rules.iter().enumerate().find_map(|(idx, rule)| match rule {
         RuleSet::Rule(rule) => {
             if rule.should_apply(&intermediary) {
-                Some(rule)
+                Some(idx)
             } else {
                 None
             }
         }
     });
+    drop(config);
 
-    log::info!("matching_rule: {:?}", matching_rule);
 
-    if let Some(rule) = matching_rule {
+    if let Some(idx) = matching_rule_idx {
         //add uri and route from configuration (enrich)
+        log::info!("idx: {:?}", idx);
+        let config_guard = configuration.lock().await;
+        log::info!("guard {:?}", config_guard);
+        let rule = config_guard.rules[idx].into_inner();
+        log::info!("matching_rule: {:?}", rule);
         let mut holder = RuleAndIntermediaryHolder {
             rule,
-            intermediary: &intermediary,
+            intermediary,
         };
 
         log::info!("holder");
@@ -80,7 +86,7 @@ pub async fn routes(
             };
             (logging.0)(&log_output);
             let inter = Intermediary::async_from(resp).await;
-            holder.intermediary = &inter;
+            holder.intermediary = inter;
             let resp = Response::async_from(holder).await;
             log::info!("resp: {:?}", resp);
             Ok(resp)
@@ -99,8 +105,8 @@ pub async fn routes(
                 .await;
             }
         }
-
         resp
+
     } else {
         //TODO create this from intermediary
         let mut no_matching_rule =

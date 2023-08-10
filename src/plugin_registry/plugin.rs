@@ -1,21 +1,17 @@
 use super::{Function, InvocationError, PluginDeclaration};
 use libloading::Library;
 
-
-
-
 use serde_json::Value;
-use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 
 use std::fmt::Debug;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{env, fs, io};
 
 pub struct FunctionProxy {
-    function: Box<dyn Function + Send>,
+    function: Arc<Box<dyn Function + Send>>,
     _lib: Arc<Library>,
 }
 
@@ -29,24 +25,27 @@ impl Function for FunctionProxy {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ExternalFunctions {
-    functions: HashMap<String, FunctionProxy>,
+    functions: Arc<Mutex<HashMap<String, FunctionProxy>>>,
     libraries: Vec<Arc<Library>>,
 }
+
+unsafe impl Send for ExternalFunctions {}
+unsafe impl Sync for ExternalFunctions {}
 
 impl Debug for ExternalFunctions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ExternalFunctions")
-            .field("functions", &self.functions.keys())
+            .field("functions", &self.functions.lock().unwrap().keys())
             .finish()
     }
 }
 
 impl ExternalFunctions {
-    pub fn new(path_to_plugins: &PathBuf) -> ExternalFunctions {
+    pub fn new(path_to_plugin: &PathBuf) -> ExternalFunctions {
         let mut default = ExternalFunctions::default();
-        default.load_from_path(path_to_plugins).unwrap();
+        default.load_from_file(path_to_plugin).unwrap();
         default
     }
 
@@ -84,56 +83,19 @@ impl ExternalFunctions {
         (decl.register)(&mut registrar);
 
         // add all loaded plugins to the functions map
-        self.functions.extend(registrar.functions);
+        self.functions.lock().unwrap().extend(registrar.functions);
         // and make sure ExternalFunctions keeps a reference to the library
         self.libraries.push(library);
 
         Ok(())
     }
 
-    pub fn load_from_path(&mut self, plugin_dir: &PathBuf) -> io::Result<()> {
+    pub fn load_from_file(&mut self, plugin_path: &PathBuf) -> io::Result<()> {
         #[cfg(feature = "enablelog")]
-        log::info!("Loading plugins from {:?}", plugin_dir);
-
-        let abs_path_to_plugins = std::fs::canonicalize(plugin_dir).unwrap();
-        let entries: Vec<_> = fs::read_dir(abs_path_to_plugins)?
-            .filter_map(|res| match env::consts::OS {
-                "windows" => match res {
-                    Ok(e)
-                        if e.path().extension()? == "dll"
-                            || e.path().extension()? == "module" =>
-                    {
-                        Some(e.path())
-                    }
-                    _ => None,
-                },
-                "macos" => match res {
-                    Ok(e)
-                        if e.path().extension()? == "dylib"
-                            || e.path().extension()? == "module" =>
-                    {
-                        Some(e.path())
-                    }
-                    _ => None,
-                },
-                _ => match res {
-                    Ok(e)
-                        if e.path().extension()? == "so"
-                            || e.path().extension()? == "module" =>
-                    {
-                        Some(e.path())
-                    }
-                    _ => None,
-                },
-            })
-            .collect();
-        #[cfg(feature = "enablelog")]
-        log::info!("Found {} plugins", entries.len());
+        log::info!("Loading plugin from {:?}", plugin_path);
 
         unsafe {
-            for path in entries.iter() {
-                self.load(path).expect("Function loading failed");
-            }
+            self.load(plugin_path).expect("Function loading failed");
         }
         Ok(())
     }
@@ -144,18 +106,16 @@ impl ExternalFunctions {
         arguments: Vec<Value>,
     ) -> Result<String, InvocationError> {
         self.functions
+            .lock().unwrap()
             .get(function)
             .ok_or_else(|| format!("\"{function}\" not found"))?
             .call(arguments)
     }
 
     pub fn has(&self, key: &str) -> bool {
-        self.functions.contains_key(key)
+        self.functions.lock().unwrap().contains_key(key)
     }
 
-    pub fn keys(&self) -> Keys<String, FunctionProxy> {
-        self.functions.keys()
-    }
 }
 
 struct PluginRegistrar {
@@ -179,7 +139,7 @@ impl super::PluginRegistrar for PluginRegistrar {
         function: Box<dyn Function + Send>,
     ) {
         let proxy = FunctionProxy {
-            function,
+            function: function.into(),
             _lib: Arc::clone(&self.lib),
         };
         self.functions.insert(name.to_string(), proxy);

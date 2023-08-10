@@ -1,5 +1,7 @@
 use bytes::Buf;
-use http::{HeaderMap, Method, StatusCode, Uri, header::HeaderName, HeaderValue};
+use http::{
+    header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
+};
 use hyper::{Body, Request, Response};
 use json_dotpath::DotPaths;
 use lazy_static::lazy_static;
@@ -7,7 +9,8 @@ use rand::Rng;
 use regex::RegexSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use serde_json::Value;
+use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,6 +28,8 @@ pub enum ConfigurationError {
     #[error("Not forwarding as per rule definition")]
     NotForwarding,
 }
+
+use crate::plugin_registry::ExternalFunctions;
 
 use super::loader::{DeserializationError, YamlFileLoader};
 
@@ -111,9 +116,8 @@ pub struct BodyManipulation {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Plugin {
     path: String,
-    //TODO implement Serialize / JSON Schema for external functions and load them directly during deserialize
-    /*     #[serde(skip)]
-    loaded: Option<ExternalFunctions>, */
+    name: String,
+    args: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -145,7 +149,7 @@ pub enum Then {
         static_base_dir: Option<String>,
     },
     Mock {
-        body: Option<String>,
+        body: Option<Value>,
         status: Option<String>,
         headers: Option<HashMap<String, String>>,
     },
@@ -163,6 +167,14 @@ pub enum RuleSet {
     Rule(Rule),
 }
 
+impl RuleSet {
+    pub fn into_inner(&self) -> &Rule {
+        match self {
+            RuleSet::Rule(rule) => rule,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Rule {
     pub name: String,
@@ -171,6 +183,8 @@ pub struct Rule {
     pub with: Option<With>,
     #[serde(skip)]
     pub path: String,
+    #[serde(skip)]
+    plugins: Option<ExternalFunctions>,
 }
 
 impl Rule {
@@ -249,23 +263,22 @@ impl Default for NConfiguration {
             active_rule_indices: vec![0],
             fe_selected_rule: 0,
             rules: vec![RuleSet::Rule(Rule {
-                name: String::from("Static fallback - no rules found or rules are defective"),
+                name: String::from("Static fallback - no rules found"),
+                plugins: None,
                 when: When {
-                    matches: vec![
-                        Match{
-                            uri: String::from(".*"),
-                            body: None,
-                        }
-                    ],
+                    matches: vec![Match {
+                        uri: String::from(".*"),
+                        body: None,
+                    }],
                     matches_methods: None,
                     body_contains: None,
                 },
-                then: Then::Static{
+                then: Then::Static {
                     static_base_dir: None,
                 },
                 with: None,
                 path: String::from(""),
-            })]
+            })],
         }
     }
 }
@@ -276,31 +289,46 @@ impl NConfiguration {
     ) -> Result<NConfiguration, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
-        let rules = loader.load_from_directories(paths)?;
+        let mut rules = loader.load_from_directories(paths)?;
 
         //load plugins
-        /*         for rule in &rules {
+        for rule in &mut rules {
             match rule {
                 RuleSet::Rule(rule) => {
                     if let Some(with) = &rule.with {
                         if let Some(plugins) = &with.plugins {
                             for plugin in plugins {
                                 let path = PathBuf::from(&plugin.path);
+                                let absolute_path = path.canonicalize()?;
                                 let external_functions =
-                                    ExternalFunctions::new(path);
-                                plugin.loaded = Some(external_functions);
+                                    ExternalFunctions::new(&absolute_path);
+                                rule.plugins = Some(external_functions);
                             }
                         }
                     }
                 }
             }
-        } */
+        }
+
+        log::info!("Loaded rules: {:?}", rules);
 
         Ok(NConfiguration {
             active_rule_indices: vec![0],
             fe_selected_rule: 0,
             rules,
         })
+    }
+
+    pub fn reload(&mut self, paths: &Vec<PathBuf>) -> Result<(), String> {
+        match NConfiguration::load(paths) {
+            Ok(new_config) => {
+                self.rules = new_config.rules;
+                self.active_rule_indices = new_config.active_rule_indices;
+                self.fe_selected_rule = new_config.fe_selected_rule;
+                Ok(())
+            }
+            Err(e) => Err(format!("Error reloading config: {:?}", e)),
+        }
     }
 
     pub fn select_next(&mut self) {
@@ -418,7 +446,65 @@ impl TryFrom<Intermediary> for hyper::Request<hyper::Body> {
 
 pub struct RuleAndIntermediaryHolder<'a> {
     pub rule: &'a Rule,
-    pub intermediary: &'a Intermediary,
+    pub intermediary: Intermediary,
+}
+
+impl RuleAndIntermediaryHolder<'_> {
+    pub fn apply_plugins(
+        &self,
+        next: &mut serde_json::Value,
+    ) {
+        let plugins = self.rule.plugins.as_ref().unwrap();
+        log::info!("Plugins: {:?}, next: {:?}", plugins, next);
+        match next {
+            serde_json::Value::String(val) => {
+                if plugins.has(&val) {
+                    let result =
+                        plugins.call(&val, vec![]).expect("Invocation failed");
+                    let try_serialize = serde_json::from_str(&result);
+                    if let Ok(i) = try_serialize {
+                        *next = i;
+                    } else {
+                        *next = serde_json::Value::String(result);
+                    }
+                }
+            }
+            serde_json::Value::Array(val) => {
+                for i in val {
+                    self.apply_plugins(i);
+                }
+            }
+            serde_json::Value::Object(val) => {
+                let plugin = val.get("plugin");
+                let args = val.get("args");
+                match (plugin, args) {
+                    (Some(p), Some(a)) => {
+                        if let (
+                            serde_json::Value::String(function),
+                            serde_json::Value::Array(arguments),
+                        ) = (p, a)
+                        {
+                            let result = plugins
+                                .call(function, arguments.clone())
+                                .expect("Invocation failed");
+                            let try_serialize = serde_json::from_str(&result);
+                            if let Ok(i) = try_serialize {
+                                *next = i;
+                            } else {
+                                *next = serde_json::Value::String(result);
+                            }
+                        }
+                    }
+                    _ => {
+                        for (_, i) in val {
+                            self.apply_plugins(i);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 //convert from holder to hyper request
@@ -470,7 +556,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
     async fn async_from(holder: RuleAndIntermediaryHolder<'_>) -> Self {
         //TODO: apply plugins
 
-        let mut preemtive_body = String::new();
+        let preemtive_body = &mut holder.intermediary.body.clone();
 
         let mut builder = holder
             .intermediary
@@ -500,7 +586,6 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                         manipulator.iter().for_each(|m| {
                             body.dot_set(&m.at, &m.with).unwrap();
                         });
-                        preemtive_body = body.to_string();
                     }
 
                     if let Some(headers) = &modify.delete_headers {
@@ -531,9 +616,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 } else {
                     builder = builder.status(hyper::StatusCode::OK)
                 }
-
                 if let Some(body) = body {
-                    preemtive_body = body.clone();
+                    *preemtive_body = body.clone();
                 }
             }
             //headers
@@ -552,7 +636,9 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                             builder = builder.header(key, value);
                         }
                     }
-                    if let Some(delete_headers) = &modify_response.delete_headers {
+                    if let Some(delete_headers) =
+                        &modify_response.delete_headers
+                    {
                         for h in delete_headers {
                             if builder.headers_mut().unwrap().contains_key(h) {
                                 builder.headers_mut().unwrap().remove(h);
@@ -560,13 +646,15 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                         }
                     }
                 }
-                return Response::from(holder.intermediary.clone());
             }
             //nothing
             Then::Static { static_base_dir } => {
-                log::info!("static base dir: {:?}, uri: {}", static_base_dir, holder.intermediary.uri.as_ref().unwrap());
+                log::info!(
+                    "static base dir: {:?}, uri: {}",
+                    static_base_dir,
+                    holder.intermediary.uri.as_ref().unwrap()
+                );
                 if let Some(path) = static_base_dir {
-
                     let static_path = hyper_staticfile::resolve_path(
                         path,
                         holder.intermediary.uri.clone().unwrap().path(),
@@ -580,7 +668,10 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                         .request_parts(
                             holder.intermediary.method.as_ref().unwrap(),
                             &holder.intermediary.uri.clone().unwrap(),
-                            &HeaderMap::from_iter(vec![(header_name, header_value)]),
+                            &HeaderMap::from_iter(vec![(
+                                header_name,
+                                header_value,
+                            )]),
                         )
                         .build(static_path)
                         .unwrap();
@@ -593,7 +684,10 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
         builder = builder.header("Access-Control-Allow-Origin", "*");
         builder = builder.header("Access-Control-Allow-Methods", "*");
 
-        let resp = builder.body(Body::from(preemtive_body)).unwrap();
+        holder.apply_plugins(preemtive_body);
+        log::info!("after plugins: {:?}", preemtive_body);
+        let resp_body = Body::from(preemtive_body.to_string());
+        let resp = builder.body(resp_body).unwrap();
         log::info!("response: {:?}", resp);
         resp
     }

@@ -5,13 +5,14 @@
         - uri: /test
     then:
       functionAs: "Mock"
-      body: "Hello World"
+      body: "{{TestPlugin}}"
       status: "200" 
 
     with:
       plugins:
-        - path: './plugins/'
-
+        - name: "foobar"
+          path: './plugins/libtest_plugin.so'
+   
 - Rule:
     name: "Rule 2"
     when:
@@ -26,11 +27,6 @@
       modifyResponse: 
         keepHeaders:
           - "Content-Type"
-
-    with:
-      plugins:
-        - path: './plugins/'
-
 
   
   

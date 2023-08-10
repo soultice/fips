@@ -7,5 +7,10 @@
     "file:///home/fpfings/tss/01_playgrounds/fips/new-fips-schema.json": [
       "/**/*.nrule.yaml"
     ]
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/.jj": true,
+    "~": true,
   }
 }

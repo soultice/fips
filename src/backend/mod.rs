@@ -9,8 +9,9 @@ use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use crate::{configuration::nconfiguration::NConfiguration};
+use crate::configuration::nconfiguration::NConfiguration;
 use crate::ExternalFunctions;
+use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(not(feature = "ui"))]
 use fips_utility::log::Loggable;
@@ -22,22 +23,18 @@ use std::any::Any;
 use log::info;
 
 pub fn spawn_backend(
-    configuration: &Arc<Mutex<NConfiguration>>,
-    plugins: &Arc<Mutex<ExternalFunctions>>,
+    configuration: &Arc<AsyncMutex<NConfiguration>>,
     addr: &SocketAddr,
     logger: &Arc<PaintLogsCallbacks>,
 ) -> JoinHandle<hyper::Result<()>> {
-    let capture_plugins = plugins.clone();
     let capture_configuration = configuration.clone();
     let capture_logger = logger.clone();
 
     let make_svc = make_service_fn(move |_| {
-        let inner_plugins = capture_plugins.clone();
         let inner_configuration = capture_configuration.clone();
         let inner_logger = capture_logger.clone();
 
         let responder = Box::new(move |req: Request<Body>| {
-            let _innermost_plugins = inner_plugins.clone();
             let innermost_configuration = inner_configuration.clone();
             let innermost_logger = inner_logger.clone();
 

@@ -23,6 +23,7 @@ use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
 
 use crate::plugin_registry::ExternalFunctions;
+use tokio::sync::Mutex as AsyncMutex;
 
 
 #[cfg(feature = "logging")]
@@ -57,17 +58,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
-    let plugins = Arc::new(Mutex::new(ExternalFunctions::new(&cli_options.plugins)));
-
     let configuration = Arc::new(Mutex::new(
         NConfiguration::load(&cli_options.nconfig).unwrap_or_default()
     ));
-    log::info!("new_configuration: {:?}", configuration);
+    let async_configuration = Arc::new(AsyncMutex::new(NConfiguration::load(&cli_options.nconfig).unwrap_or_default()));
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
         let (state, app, logging) =
-            { frontend::setup(configuration.clone(), cli_options.clone()) };
+            { frontend::setup(configuration, cli_options.clone()) };
         #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
             backend::setup()
@@ -79,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
 
-    let _rt_handle = backend::spawn_backend(&configuration, &plugins, &addr, &logging);
+    let _rt_handle = backend::spawn_backend(&async_configuration, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {
