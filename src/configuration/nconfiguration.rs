@@ -252,8 +252,8 @@ impl Rule {
 
 #[derive(Deserialize, Clone, Debug, JsonSchema)]
 pub struct NConfiguration {
-    active_rule_indices: Vec<usize>,
-    fe_selected_rule: usize,
+    pub active_rule_indices: Vec<usize>,
+    pub fe_selected_rule: usize,
     pub rules: Vec<RuleSet>,
 }
 
@@ -313,7 +313,8 @@ impl NConfiguration {
         log::info!("Loaded rules: {:?}", rules);
 
         Ok(NConfiguration {
-            active_rule_indices: vec![0],
+            //all rules are active initially
+            active_rule_indices: (0..rules.len()).collect(),
             fe_selected_rule: 0,
             rules,
         })
@@ -334,17 +335,28 @@ impl NConfiguration {
 
     pub fn select_next(&mut self) {
         self.fe_selected_rule =
-            (self.fe_selected_rule + 1) % self.active_rule_indices.len();
+            (self.fe_selected_rule + 1) % self.rules.len();
     }
 
     pub fn select_previous(&mut self) {
         self.fe_selected_rule =
-            (self.fe_selected_rule + self.active_rule_indices.len() - 1)
-                % self.active_rule_indices.len();
+            (self.fe_selected_rule + self.rules.len() - 1)
+                % self.rules.len();
+    }
+
+    pub fn toggle_rule(&mut self) {
+        log::info!("Toggling rule: {}", self.fe_selected_rule);
+        if self.active_rule_indices.contains(&self.fe_selected_rule) {
+            self.remove_from_active_indices();
+            log::info!("Removed rule: {}, {:?}", self.fe_selected_rule, self.active_rule_indices);
+        } else {
+            self.add_to_active_indices();
+            log::info!("Removed rule: {}, {:?}", self.fe_selected_rule, self.active_rule_indices);
+        }
     }
 
     pub fn remove_from_active_indices(&mut self) {
-        self.active_rule_indices.remove(self.fe_selected_rule);
+        self.active_rule_indices.retain(|&x| x != self.fe_selected_rule);
     }
 
     pub fn add_to_active_indices(&mut self) {

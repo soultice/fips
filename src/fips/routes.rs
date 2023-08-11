@@ -1,7 +1,7 @@
 use crate::{
     configuration::nconfiguration::{
-        AsyncFrom, Intermediary, NConfiguration,
-        RuleAndIntermediaryHolder, RuleSet,
+        AsyncFrom, Intermediary, NConfiguration, RuleAndIntermediaryHolder,
+        RuleSet,
     },
     utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo},
     PaintLogsCallbacks,
@@ -21,6 +21,7 @@ pub async fn routes(
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>, hyper::Error> {
     let requestinfo = RequestInfo::from(&req);
+
     let log_output = Loggable {
         message_type: LoggableType::IncomingRequestAtFfips(requestinfo),
         message: "".to_owned(),
@@ -33,7 +34,7 @@ pub async fn routes(
     //TODO clean up adding cors, have rule that makes sense here
     if let (Some(method), Some(uri)) = (&c.method, &c.uri) {
         if method == Method::OPTIONS {
-            let mut resp = Response::new(Body::from(""));
+            let mut resp = Response::new(Body::empty());
             add_cors_headers(resp.headers_mut());
             return Ok(resp);
         }
@@ -44,17 +45,23 @@ pub async fn routes(
     }
     // find first matching rule
     let config = configuration.lock().await;
-    let matching_rule_idx = config.rules.iter().enumerate().find_map(|(idx, rule)| match rule {
-        RuleSet::Rule(rule) => {
-            if rule.should_apply(&intermediary) {
-                Some(idx)
-            } else {
+    let matching_rule_idx =
+        config.rules.iter().enumerate().find_map(|(idx, rule)| {
+            if !config.active_rule_indices.contains(&idx) {
                 None
+            } else {
+                match rule {
+                    RuleSet::Rule(rule) => {
+                        if rule.should_apply(&intermediary) {
+                            Some(idx)
+                        } else {
+                            None
+                        }
+                    }
+                }
             }
-        }
-    });
+        });
     drop(config);
-
 
     if let Some(idx) = matching_rule_idx {
         //add uri and route from configuration (enrich)
@@ -63,10 +70,7 @@ pub async fn routes(
         log::info!("guard {:?}", config_guard);
         let rule = config_guard.rules[idx].into_inner();
         log::info!("matching_rule: {:?}", rule);
-        let mut holder = RuleAndIntermediaryHolder {
-            rule,
-            intermediary,
-        };
+        let mut holder = RuleAndIntermediaryHolder { rule, intermediary };
 
         log::info!("holder");
         let request = hyper::Request::try_from(&holder);
@@ -74,6 +78,15 @@ pub async fn routes(
 
         // Rule is forwarding (Proxy/FIPS)
         let resp = if let Ok(request) = request {
+            let requestinfo = RequestInfo::from(&request);
+            let log_output = Loggable {
+                message_type: LoggableType::OutgoingRequestToServer(
+                    requestinfo,
+                ),
+                message: "".to_owned(),
+            };
+            (logging.0)(&log_output);
+
             let client = Arc::new(Client::new());
             let resp = client.request(request).await?;
 
@@ -85,6 +98,7 @@ pub async fn routes(
                 message: "".to_owned(),
             };
             (logging.0)(&log_output);
+
             let inter = Intermediary::async_from(resp).await;
             holder.intermediary = inter;
             let resp = Response::async_from(holder).await;
@@ -106,7 +120,6 @@ pub async fn routes(
             }
         }
         resp
-
     } else {
         //TODO create this from intermediary
         let mut no_matching_rule =

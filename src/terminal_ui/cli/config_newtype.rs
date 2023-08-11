@@ -26,15 +26,16 @@ impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
                         r.name, r.path
                     ))]);
                 }
+                // can be used to set background color of a rule
                 let bg = match true {
                     true => Color::Reset,
                     false => Color::Reset,
                 };
-                let fg = match true {
+                let fg = match configuration.active_rule_indices.contains(&idx) {
                     true => Color::Blue,
                     false => Color::DarkGray,
                 };
-                let modifier = match true {
+                let modifier = match configuration.fe_selected_rule == idx {
                     true => Modifier::UNDERLINED,
                     false => Modifier::DIM,
                 };

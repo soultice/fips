@@ -12,6 +12,7 @@ pub fn match_keybinds(
     code: crokey::crossterm::event::KeyEvent,
     app: &mut App,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    log::debug!("Key pressed: {:?}", code);
     match code {
             key!(esc) => {
                 app.should_quit = true;
@@ -22,7 +23,7 @@ pub fn match_keybinds(
             key!(ctrl-d) => {
                 app.should_quit = true;
             },
-            key!(shift-tab) => app.go_to_previous_tab(),
+            key!(shift-backtab) => app.go_to_previous_tab(),
             key!(tab) => app.go_to_next_tab(),
             key!(r) => {
                 app.state
@@ -42,7 +43,7 @@ pub fn match_keybinds(
             }
             key!(enter) => {
                 if app.tabs.index == 2 {
-                    //TODO app.state.configuration.lock().unwrap().toggle_rule()
+                    app.state.configuration.lock().unwrap().toggle_rule()
                 }
             }
             key!(down) => {
