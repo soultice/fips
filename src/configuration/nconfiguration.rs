@@ -202,7 +202,7 @@ impl Rule {
 
         let uri = intermediary.clone().uri.unwrap();
 
-        let some_uris_match = uri_regex.is_match(&uri.path().to_string());
+        let some_uris_match = uri_regex.is_match(uri.path());
         if !some_uris_match {
             return false;
         }
@@ -320,6 +320,7 @@ impl NConfiguration {
     }
 
     pub fn reload(&mut self, paths: &Vec<PathBuf>) -> Result<(), String> {
+        //TODO enable plugin reload
         match NConfiguration::load(paths) {
             Ok(new_config) => {
                 self.rules = new_config.rules;
@@ -327,7 +328,7 @@ impl NConfiguration {
                 self.fe_selected_rule = new_config.fe_selected_rule;
                 Ok(())
             }
-            Err(e) => Err(format!("Error reloading config: {:?}", e)),
+            Err(e) => Err(format!("Error reloading config: {e:?}")),
         }
     }
 

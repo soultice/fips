@@ -80,7 +80,7 @@ pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), Fronten
         terminal.draw(|f| ui::draw(f, &mut unwrapped_app))?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut unwrapped_app)?,
+            Event::Input(event) => util::match_keybinds(event, &mut unwrapped_app)?,
             Event::Tick => unwrapped_app.on_tick()?,
         };
 

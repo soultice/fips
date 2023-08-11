@@ -48,11 +48,11 @@ impl<'a> App<'a> {
         }
     }
 
-    pub fn on_right(&mut self) {
+    pub fn go_to_next_tab(&mut self) {
         self.tabs.next();
     }
 
-    pub fn on_left(&mut self) {
+    pub fn go_to_previous_tab(&mut self) {
         self.tabs.previous();
     }
 

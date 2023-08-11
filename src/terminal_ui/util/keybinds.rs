@@ -1,39 +1,59 @@
-use std::sync::{Mutex, Arc};
+use std::sync::{Arc, Mutex};
 
-use crossterm::event::KeyCode;
+use crokey::key;
+use crossterm::event::KeyEvent;
 
-use crate::{terminal_ui::{cli::App, debug::PrintInfo}, configuration};
+use crate::{
+    configuration,
+    terminal_ui::{cli::App, debug::PrintInfo},
+};
 
-pub fn match_keybinds(code: KeyCode, app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+pub fn match_keybinds(
+    code: crokey::crossterm::event::KeyEvent,
+    app: &mut App,
+) -> Result<(), Box<dyn std::error::Error>> {
     match code {
-        KeyCode::Esc => {
-            app.should_quit = true;
-        }
-        KeyCode::Char('r') => {
-            app.state.configuration.lock().unwrap().reload(&app.opts.nconfig)?;
-            app.state
-                .add_message(PrintInfo::PLAIN(String::from("Config files reloaded")))
-                .unwrap_or_default();
-        }
-        KeyCode::Char('c') => {
-            *app.state.messages.lock().unwrap() = Vec::new();
-            *app.state.traffic_info.lock().unwrap() = Vec::new();
-        }
-        KeyCode::Char(_c) => {}
-        KeyCode::BackTab => app.on_left(),
-        KeyCode::Tab => app.on_right(),
-        KeyCode::Enter => {
-            if app.tabs.index == 2 {
-                //TODO app.state.configuration.lock().unwrap().toggle_rule()
+            key!(esc) => {
+                app.should_quit = true;
             }
-        }
-        KeyCode::Down => {
-            if app.tabs.index == 2 {
-                app.state.configuration.lock().unwrap().select_next()
+            key!(ctrl-c) => {
+                app.should_quit = true;
+            },
+            key!(ctrl-d) => {
+                app.should_quit = true;
+            },
+            key!(shift-tab) => app.go_to_previous_tab(),
+            key!(tab) => app.go_to_next_tab(),
+            key!(r) => {
+                app.state
+                    .configuration
+                    .lock()
+                    .unwrap()
+                    .reload(&app.opts.nconfig)?;
+                app.state
+                    .add_message(PrintInfo::PLAIN(String::from(
+                        "Config files reloaded",
+                    )))
+                    .unwrap_or_default();
             }
-        }
-        KeyCode::Up => app.state.configuration.lock().unwrap().select_previous(),
-        _ => {}
+            key!(c) => {
+                *app.state.messages.lock().unwrap() = Vec::new();
+                *app.state.traffic_info.lock().unwrap() = Vec::new();
+            }
+            key!(enter) => {
+                if app.tabs.index == 2 {
+                    //TODO app.state.configuration.lock().unwrap().toggle_rule()
+                }
+            }
+            key!(down) => {
+                if app.tabs.index == 2 {
+                    app.state.configuration.lock().unwrap().select_next()
+                }
+            }
+            key!(up) => {
+                app.state.configuration.lock().unwrap().select_previous()
+            }
+            _ => {}
     }
     Ok(())
 }

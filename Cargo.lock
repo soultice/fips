@@ -133,6 +133,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "crokey"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94a9d12db57046a9063a1826dba50c7e77d45aed3e661dbfcf48fc7dc9189732"
+dependencies = [
+ "crokey-proc_macros",
+ "crossterm 0.24.0",
+ "once_cell",
+ "serde",
+]
+
+[[package]]
+name = "crokey-proc_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cc92863b630b95cb62f4fc1cef080110cc19a14da0a321fd808a60ddb57c3d3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "crossterm"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab9f7409c70a38a56216480fba371ee460207dd8926ccf5b4160591759559170"
+dependencies = [
+ "bitflags",
+ "crossterm_winapi",
+ "libc",
+ "mio",
+ "parking_lot",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi",
+]
+
+[[package]]
 name = "crossterm"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -196,7 +235,8 @@ dependencies = [
  "bytes",
  "clap",
  "colorgrad",
- "crossterm",
+ "crokey",
+ "crossterm 0.24.0",
  "futures",
  "gradient_tui_fork",
  "http",
@@ -351,7 +391,7 @@ source = "git+https://github.com/soultice/tui-rs.git#00d171dab8edf83b5fd8c620b9a
 dependencies = [
  "bitflags",
  "cassowary",
- "crossterm",
+ "crossterm 0.25.0",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -709,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.10.0"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
+checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
 name = "ordered-float"
