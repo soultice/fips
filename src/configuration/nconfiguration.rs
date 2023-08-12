@@ -159,7 +159,7 @@ pub enum Then {
 pub struct With {
     pub sleep: Option<u64>,
     probability: Option<f32>,
-    plugins: Option<Vec<Plugin>>,
+    pub plugins: Option<Vec<Plugin>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -184,7 +184,7 @@ pub struct Rule {
     #[serde(skip)]
     pub path: String,
     #[serde(skip)]
-    plugins: Option<ExternalFunctions>,
+    pub plugins: Option<ExternalFunctions>,
 }
 
 impl Rule {
@@ -567,8 +567,6 @@ impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
 impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
     type Output = Response<Body>;
     async fn async_from(holder: RuleAndIntermediaryHolder<'_>) -> Self {
-        //TODO: apply plugins
-
         let preemtive_body = &mut holder.intermediary.body.clone();
 
         let mut builder = holder

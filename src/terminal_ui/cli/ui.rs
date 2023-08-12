@@ -56,7 +56,9 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .tabs
         .titles
         .iter()
-        .map(|t| Spans::from(Span::styled(*t, Style::default().fg(Color::White))))
+        .map(|t| {
+            Spans::from(Span::styled(*t, Style::default().fg(Color::White)))
+        })
         .collect();
 
     let tabs = Tabs::new(titles)
@@ -76,23 +78,41 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         })
         .collect();
 
-    //TODO: display new plugins
-    let loaded_plugins_info: Vec<Spans> =
-        vec![Spans::from(String::from("No plugins loaded"))];
+    let all_plugins: Vec<Spans> = app
+        .state
+        .configuration
+        .lock()
+        .unwrap()
+        .rules
+        .iter()
+        .map(|x| x.into_inner())
+        .flat_map(|x| &x.plugins).cloned()
+        .flat_map(|x| {
+            let functions = x.functions.lock().unwrap();
+            let copied_keys =
+                functions.keys().cloned().collect::<Vec<String>>();
+            copied_keys
+        }).map(Spans::from)
+        .collect();
 
+    //TODO: display new plugins
     f.render_widget(tabs, chunks[0]);
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], main_info),
         1 => draw_info_tab(f, app, chunks[1], Arc::clone(&app.state)),
         2 => draw_rules_tab(f, app, chunks[1], Arc::clone(&app.state)),
-        3 => draw_first_tab(f, app, chunks[1], loaded_plugins_info),
+        3 => draw_first_tab(f, app, chunks[1], all_plugins),
         _ => {}
     };
 }
 
-fn draw_first_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, text: Vec<Spans>)
-where
+fn draw_first_tab<B>(
+    f: &mut Frame<B>,
+    _app: &mut App,
+    area: Rect,
+    text: Vec<Spans>,
+) where
     B: Backend,
 {
     let chunks = Layout::default()
@@ -106,7 +126,9 @@ where
     B: Backend,
 {
     let block = Block::default()
-        .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT | Borders::BOTTOM)
+        .borders(
+            Borders::LEFT | Borders::TOP | Borders::RIGHT | Borders::BOTTOM,
+        )
         .title(Span::styled(
             "Logs",
             Style::default()
@@ -120,8 +142,12 @@ where
     f.render_widget(paragraph, area);
 }
 
-fn draw_rules_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: Arc<State>)
-where
+fn draw_rules_tab<B>(
+    f: &mut Frame<B>,
+    _app: &mut App,
+    area: Rect,
+    state: Arc<State>,
+) where
     B: Backend,
 {
     let block = Block::default().borders(Borders::ALL).title(Span::styled(
@@ -141,11 +167,16 @@ where
     f.render_widget(list, chunks[0])
 }
 
-fn draw_info_tab<B>(f: &mut Frame<B>, _app: &mut App, area: Rect, state: Arc<State>)
-where
+fn draw_info_tab<B>(
+    f: &mut Frame<B>,
+    _app: &mut App,
+    area: Rect,
+    state: Arc<State>,
+) where
     B: Backend,
 {
-    let response_info: Vec<LoggableNT> = state.traffic_info.lock().unwrap().to_vec();
+    let response_info: Vec<LoggableNT> =
+        state.traffic_info.lock().unwrap().to_vec();
 
     let text: Vec<Text> = response_info.iter().map(Text::from).collect();
 

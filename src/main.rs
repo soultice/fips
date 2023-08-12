@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     };
 
+    //TODO: get rid of duplication caused by introduction of async mutex
     let configuration = Arc::new(Mutex::new(
         NConfiguration::load(&cli_options.nconfig).unwrap_or_default()
     ));

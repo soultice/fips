@@ -27,7 +27,7 @@ impl Function for FunctionProxy {
 
 #[derive(Default, Clone)]
 pub struct ExternalFunctions {
-    functions: Arc<Mutex<HashMap<String, FunctionProxy>>>,
+    pub functions: Arc<Mutex<HashMap<String, FunctionProxy>>>,
     libraries: Vec<Arc<Library>>,
 }
 
