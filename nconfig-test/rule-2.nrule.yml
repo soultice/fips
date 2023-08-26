@@ -1,20 +1,4 @@
 - Rule:
-    name: "Static"
-    when:
-      matchesUris:
-        - uri: ^/.*
-    then:
-      functionAs: "Static"
-      baseDir: "/home/fpfings"
-
-    with: 
-      plugins:
-        - name: "foobar"
-          path: './plugins/libpluginname.so'
-          args:
-            - ""
-
-- Rule:
     name: "Mock"
     when:
       matchesUris:
@@ -30,3 +14,19 @@
           args:
             - ""
       
+- Rule:
+    name: "Static"
+    when:
+      matchesUris:
+        - uri: ^/.*
+    then:
+      functionAs: "Static"
+      baseDir: "/home/fpfings"
+
+    with: 
+      plugins:
+        - name: "foobar"
+          path: './plugins/libpluginname.so'
+          args:
+            - ""
+
