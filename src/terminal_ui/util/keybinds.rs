@@ -1,16 +1,10 @@
-use std::sync::{Arc, Mutex};
-
 use crokey::key;
-use crossterm::event::KeyEvent;
 
-use crate::{
-    configuration,
-    terminal_ui::{cli::App, debug::PrintInfo},
-};
+use crate:: terminal_ui::{cli::App, debug::PrintInfo};
 
-pub fn match_keybinds(
+pub async fn match_keybinds(
     code: crokey::crossterm::event::KeyEvent,
-    app: &mut App,
+    app: &mut App<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("Key pressed: {:?}", code);
     match code {
@@ -29,7 +23,7 @@ pub fn match_keybinds(
                 app.state
                     .configuration
                     .lock()
-                    .unwrap()
+                    .await
                     .reload(&app.opts.nconfig)?;
                 app.state
                     .add_message(PrintInfo::PLAIN(String::from(
@@ -43,16 +37,16 @@ pub fn match_keybinds(
             }
             key!(enter) => {
                 if app.tabs.index == 2 {
-                    app.state.configuration.lock().unwrap().toggle_rule()
+                    app.state.configuration.lock().await.toggle_rule()
                 }
             }
             key!(down) => {
                 if app.tabs.index == 2 {
-                    app.state.configuration.lock().unwrap().select_next()
+                    app.state.configuration.lock().await.select_next()
                 }
             }
             key!(up) => {
-                app.state.configuration.lock().unwrap().select_previous()
+                app.state.configuration.lock().await.select_previous()
             }
             _ => {}
     }

@@ -1,27 +1,44 @@
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
 };
+use gradient_tui_fork::{backend::CrosstermBackend, Terminal, text::Spans, widgets::List};
 use std::{
     io::stdout,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
-use gradient_tui_fork::{backend::CrosstermBackend, Terminal};
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-use crate::{PaintLogsCallbacks, utility::{log::{LoggableType, Loggable}, options::CliOptions}, configuration::{nconfiguration::NConfiguration}, terminal_ui::{debug::{PrintInfo, LoggableNT}, cli::{ui, App}, util, state::State}};
+use crate::{
+    configuration::nconfiguration::NConfiguration,
+    terminal_ui::{
+        cli::{ui, App, config_newtype::{ConfigurationNewtype, AsyncFrom}},
+        debug::{LoggableNT, PrintInfo},
+        state::State,
+        util,
+    },
+    utility::{
+        log::{Loggable, LoggableType},
+        options::CliOptions,
+    },
+    PaintLogsCallbacks,
+};
 use log::info;
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tokio::runtime::Runtime;
+use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Error, Debug)]
 pub enum FrontendError {
@@ -33,7 +50,10 @@ pub enum FrontendError {
     Input(#[from] std::sync::mpsc::RecvError),
 }
 
-pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), FrontendError> {
+pub async fn spawn_frontend(
+    _app: Option<App<'_>>,
+    runtime: Runtime,
+) -> Result<(), FrontendError> {
     enable_raw_mode()?;
 
     let mut unwrapped_app = _app.unwrap();
@@ -77,10 +97,31 @@ pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), Fronten
     });
 
     loop {
-        terminal.draw(|f| ui::draw(f, &mut unwrapped_app))?;
+        let all_plugins: Vec<Spans> = unwrapped_app.state
+            .configuration
+            .lock()
+            .await
+            .rules
+            .iter()
+            .map(|x| x.into_inner())
+            .flat_map(|x| &x.plugins).cloned()
+            .flat_map(|x| {
+                let functions = x.functions.lock().unwrap();
+                let copied_keys =
+                    functions.keys().cloned().collect::<Vec<String>>();
+                copied_keys
+            }).map(Spans::from)
+            .collect();
+
+        let wrapper = ConfigurationNewtype(&unwrapped_app.state.configuration);
+        let list = List::async_from(wrapper).await;
+
+        terminal.draw(|f| ui::draw(f, &mut unwrapped_app, all_plugins, list))?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event, &mut unwrapped_app)?,
+            Event::Input(event) => {
+                util::match_keybinds(event, &mut unwrapped_app).await?
+            }
             Event::Tick => unwrapped_app.on_tick()?,
         };
 
@@ -106,26 +147,30 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
         match &message.message_type {
             LoggableType::IncomingRequestAtFfips(i) => {
                 inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::IncomingRequestAtFfips(i.clone())))
+                    .add_traffic_info(LoggableNT(
+                        LoggableType::IncomingRequestAtFfips(i.clone()),
+                    ))
                     .unwrap();
             }
             LoggableType::OutGoingResponseFromFips(i) => {
                 inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::OutGoingResponseFromFips(
-                        i.clone(),
-                    )))
+                    .add_traffic_info(LoggableNT(
+                        LoggableType::OutGoingResponseFromFips(i.clone()),
+                    ))
                     .unwrap();
             }
             LoggableType::OutgoingRequestToServer(i) => {
                 inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::OutgoingRequestToServer(i.clone())))
+                    .add_traffic_info(LoggableNT(
+                        LoggableType::OutgoingRequestToServer(i.clone()),
+                    ))
                     .unwrap();
             }
             LoggableType::IncomingResponseFromServer(i) => {
                 inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::IncomingResponseFromServer(
-                        i.clone(),
-                    )))
+                    .add_traffic_info(LoggableNT(
+                        LoggableType::IncomingResponseFromServer(i.clone()),
+                    ))
                     .unwrap();
             }
             LoggableType::Plain => {
@@ -139,8 +184,8 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
     PaintLogsCallbacks(log)
 }
 
-pub fn setup(
-    configuration: Arc<Mutex<NConfiguration>>,
+pub async fn setup(
+    configuration: Arc<AsyncMutex<NConfiguration>>,
     options: CliOptions,
 ) -> (
     Option<Arc<State>>,
@@ -153,7 +198,7 @@ pub fn setup(
         traffic_info: Mutex::new(vec![]),
     });
 
-    let app = App::new(true, state.clone(), options );
+    let app = App::new(true, state.clone(), options);
 
     let logging = Arc::new(define_log_callbacks(app.state.clone()));
     (Some(state), Some(app), logging)

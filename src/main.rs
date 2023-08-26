@@ -4,7 +4,7 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use configuration::nconfiguration::NConfiguration;
 use tokio::runtime::Runtime;
 use clap::Parser;
@@ -59,15 +59,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     //TODO: get rid of duplication caused by introduction of async mutex
-    let configuration = Arc::new(Mutex::new(
-        NConfiguration::load(&cli_options.nconfig).unwrap_or_default()
-    ));
     let async_configuration = Arc::new(AsyncMutex::new(NConfiguration::load(&cli_options.nconfig).unwrap_or_default()));
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
         let (state, app, logging) =
-            { frontend::setup(configuration, cli_options.clone()) };
+            { frontend::setup(Arc::clone(&async_configuration), cli_options.clone()).await };
         #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
             backend::setup()
@@ -83,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "ui")]
     {
-        frontend::spawn_frontend(_app, runtime)?;
+        frontend::spawn_frontend(_app, runtime).await?;
     }
 
     #[cfg(not(feature = "ui"))]

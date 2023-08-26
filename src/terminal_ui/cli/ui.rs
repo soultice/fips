@@ -13,9 +13,9 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use super::gradient_newtype::NewGradient;
-use super::{config_newtype::ConfigurationNewtype, state::State, App};
+use super::{state::State, App};
 
-pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Vec<Spans<'_>>, rules_list: List<'_>) {
     let app_title = format!(
         "Fips──live on {} 😌, using config path: {}",
         app.opts.port,
@@ -78,40 +78,23 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         })
         .collect();
 
-    let all_plugins: Vec<Spans> = app
-        .state
-        .configuration
-        .lock()
-        .unwrap()
-        .rules
-        .iter()
-        .map(|x| x.into_inner())
-        .flat_map(|x| &x.plugins).cloned()
-        .flat_map(|x| {
-            let functions = x.functions.lock().unwrap();
-            let copied_keys =
-                functions.keys().cloned().collect::<Vec<String>>();
-            copied_keys
-        }).map(Spans::from)
-        .collect();
-
     //TODO: display new plugins
     f.render_widget(tabs, chunks[0]);
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], main_info),
         1 => draw_info_tab(f, app, chunks[1], Arc::clone(&app.state)),
-        2 => draw_rules_tab(f, app, chunks[1], Arc::clone(&app.state)),
+        2 => draw_rules_tab(f, app, chunks[1], rules_list.clone()),
         3 => draw_first_tab(f, app, chunks[1], all_plugins),
         _ => {}
     };
 }
 
 fn draw_first_tab<B>(
-    f: &mut Frame<B>,
-    _app: &mut App,
+    f: &mut Frame<'_, B>,
+    _app: &mut App<'_>,
     area: Rect,
-    text: Vec<Spans>,
+    text: Vec<Spans<'_>>,
 ) where
     B: Backend,
 {
@@ -143,10 +126,10 @@ where
 }
 
 fn draw_rules_tab<B>(
-    f: &mut Frame<B>,
-    _app: &mut App,
+    f: &mut Frame<'_, B>,
+    _app: &mut App<'_>,
     area: Rect,
-    state: Arc<State>,
+    rules_list: List<'_>
 ) where
     B: Backend,
 {
@@ -161,15 +144,13 @@ fn draw_rules_tab<B>(
         .constraints(constraints.as_ref())
         .split(area);
 
-    let wrapper = ConfigurationNewtype(&state.configuration);
-    let list = List::from(wrapper).block(block);
 
-    f.render_widget(list, chunks[0])
+    f.render_widget(rules_list.block(block), chunks[0])
 }
 
 fn draw_info_tab<B>(
-    f: &mut Frame<B>,
-    _app: &mut App,
+    f: &mut Frame<'_, B>,
+    _app: &mut App<'_>,
     area: Rect,
     state: Arc<State>,
 ) where

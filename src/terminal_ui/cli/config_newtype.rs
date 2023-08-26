@@ -4,14 +4,20 @@ use gradient_tui_fork::{
     widgets::{List, ListItem},
 };
 use std::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::configuration::nconfiguration::NConfiguration;
 
-pub struct ConfigurationNewtype<'a>(pub &'a Mutex<NConfiguration>);
+pub struct ConfigurationNewtype<'a>(pub &'a AsyncMutex<NConfiguration>);
+pub trait AsyncFrom<T> {
+    type Output;
+    async fn async_from(t: T) -> Self::Output;
+}
 
-impl<'a> From<ConfigurationNewtype<'_>> for List<'a> {
-    fn from(wrapper: ConfigurationNewtype) -> List<'a> {
-        let configuration = wrapper.0.lock().unwrap();
+impl<'a> AsyncFrom<ConfigurationNewtype<'_>> for List<'a> {
+    type Output = List<'a>;
+    async fn async_from(wrapper: ConfigurationNewtype<'_>) -> List<'a> {
+        let configuration = wrapper.0.lock().await;
         let items: Vec<ListItem> = configuration
             .rules
             .iter()

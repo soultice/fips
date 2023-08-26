@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 use crate::{
     configuration::{nconfiguration::NConfiguration},
@@ -7,7 +8,7 @@ use crate::{
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,
-    pub configuration: Arc<Mutex<NConfiguration>>,
+    pub configuration: Arc<AsyncMutex<NConfiguration>>,
     pub traffic_info: Mutex<Vec<LoggableNT>>,
 }
 

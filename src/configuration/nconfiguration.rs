@@ -200,9 +200,12 @@ impl Rule {
         )
         .unwrap();
 
+        log::info!("uri_regex: {:?}", uri_regex);
+
         let uri = intermediary.clone().uri.unwrap();
 
         let some_uris_match = uri_regex.is_match(uri.path());
+        log::info!("some_uris_match: {:?}", some_uris_match);
         if !some_uris_match {
             return false;
         }
@@ -213,6 +216,8 @@ impl Rule {
                     .iter()
                     .any(|m| m == intermediary.clone().method.unwrap().as_str())
             });
+
+        log::info!("some_methods_match: {:?}", some_methods_match);
         if !some_methods_match {
             return false;
         }
@@ -224,6 +229,7 @@ impl Rule {
                 .map_or(true, |body_contains| {
                     intermediary.body.as_str().unwrap().contains(body_contains)
                 });
+        log::info!("some_body_contains: {:?}", some_body_contains);
         if !some_body_contains {
             return false;
         }
@@ -242,6 +248,8 @@ impl Rule {
                 random_number < probability
             })
             .unwrap_or(true);
+
+        log::info!("probability_matches: {:?}", probability_matches);
         if !probability_matches {
             return false;
         }
@@ -274,7 +282,13 @@ impl Default for NConfiguration {
                     body_contains: None,
                 },
                 then: Then::Static {
-                    static_base_dir: None,
+                    static_base_dir: Some(
+                        std::env::current_dir()
+                            .unwrap()
+                            .into_os_string()
+                            .into_string()
+                            .unwrap(),
+                    ),
                 },
                 with: None,
                 path: String::from(""),
@@ -334,29 +348,36 @@ impl NConfiguration {
     }
 
     pub fn select_next(&mut self) {
-        self.fe_selected_rule =
-            (self.fe_selected_rule + 1) % self.rules.len();
+        self.fe_selected_rule = (self.fe_selected_rule + 1) % self.rules.len();
     }
 
     pub fn select_previous(&mut self) {
         self.fe_selected_rule =
-            (self.fe_selected_rule + self.rules.len() - 1)
-                % self.rules.len();
+            (self.fe_selected_rule + self.rules.len() - 1) % self.rules.len();
     }
 
     pub fn toggle_rule(&mut self) {
         log::info!("Toggling rule: {}", self.fe_selected_rule);
         if self.active_rule_indices.contains(&self.fe_selected_rule) {
             self.remove_from_active_indices();
-            log::info!("Removed rule: {}, {:?}", self.fe_selected_rule, self.active_rule_indices);
+            log::info!(
+                "Removed rule: {}, {:?}",
+                self.fe_selected_rule,
+                self.active_rule_indices
+            );
         } else {
             self.add_to_active_indices();
-            log::info!("Removed rule: {}, {:?}", self.fe_selected_rule, self.active_rule_indices);
+            log::info!(
+                "Removed rule: {}, {:?}",
+                self.fe_selected_rule,
+                self.active_rule_indices
+            );
         }
     }
 
     pub fn remove_from_active_indices(&mut self) {
-        self.active_rule_indices.retain(|&x| x != self.fe_selected_rule);
+        self.active_rule_indices
+            .retain(|&x| x != self.fe_selected_rule);
     }
 
     pub fn add_to_active_indices(&mut self) {
@@ -463,59 +484,59 @@ pub struct RuleAndIntermediaryHolder<'a> {
 }
 
 impl RuleAndIntermediaryHolder<'_> {
-    pub fn apply_plugins(
-        &self,
-        next: &mut serde_json::Value,
-    ) {
-        let plugins = self.rule.plugins.as_ref().unwrap();
-        log::info!("Plugins: {:?}, next: {:?}", plugins, next);
-        match next {
-            serde_json::Value::String(val) => {
-                if plugins.has(&val) {
-                    let result =
-                        plugins.call(&val, vec![]).expect("Invocation failed");
-                    let try_serialize = serde_json::from_str(&result);
-                    if let Ok(i) = try_serialize {
-                        *next = i;
-                    } else {
-                        *next = serde_json::Value::String(result);
+    pub fn apply_plugins(&self, next: &mut serde_json::Value) {
+        if let Some(plugins) = &self.rule.plugins {
+            log::info!("Plugins: {:?}, next: {:?}", plugins, next);
+            match next {
+                serde_json::Value::String(val) => {
+                    if plugins.has(&val) {
+                        let result = plugins
+                            .call(&val, vec![])
+                            .expect("Invocation failed");
+                        let try_serialize = serde_json::from_str(&result);
+                        if let Ok(i) = try_serialize {
+                            *next = i;
+                        } else {
+                            *next = serde_json::Value::String(result);
+                        }
                     }
                 }
-            }
-            serde_json::Value::Array(val) => {
-                for i in val {
-                    self.apply_plugins(i);
+                serde_json::Value::Array(val) => {
+                    for i in val {
+                        self.apply_plugins(i);
+                    }
                 }
-            }
-            serde_json::Value::Object(val) => {
-                let plugin = val.get("plugin");
-                let args = val.get("args");
-                match (plugin, args) {
-                    (Some(p), Some(a)) => {
-                        if let (
-                            serde_json::Value::String(function),
-                            serde_json::Value::Array(arguments),
-                        ) = (p, a)
-                        {
-                            let result = plugins
-                                .call(function, arguments.clone())
-                                .expect("Invocation failed");
-                            let try_serialize = serde_json::from_str(&result);
-                            if let Ok(i) = try_serialize {
-                                *next = i;
-                            } else {
-                                *next = serde_json::Value::String(result);
+                serde_json::Value::Object(val) => {
+                    let plugin = val.get("plugin");
+                    let args = val.get("args");
+                    match (plugin, args) {
+                        (Some(p), Some(a)) => {
+                            if let (
+                                serde_json::Value::String(function),
+                                serde_json::Value::Array(arguments),
+                            ) = (p, a)
+                            {
+                                let result = plugins
+                                    .call(function, arguments.clone())
+                                    .expect("Invocation failed");
+                                let try_serialize =
+                                    serde_json::from_str(&result);
+                                if let Ok(i) = try_serialize {
+                                    *next = i;
+                                } else {
+                                    *next = serde_json::Value::String(result);
+                                }
+                            }
+                        }
+                        _ => {
+                            for (_, i) in val {
+                                self.apply_plugins(i);
                             }
                         }
                     }
-                    _ => {
-                        for (_, i) in val {
-                            self.apply_plugins(i);
-                        }
-                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 }
@@ -577,6 +598,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 builder.header(key, value)
             });
 
+        log::info!("Response from Intermediary");
+
         match &holder.rule.then {
             //plugins/transformation/status/headers
             //TODO plugins
@@ -584,6 +607,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 forward_uri: _,
                 modify_response,
             } => {
+                log::info!("fips rule {:?}", modify_response);
                 if let Some(modify) = modify_response {
                     if let Some(status) = &modify.status {
                         builder = builder.status(
@@ -621,6 +645,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 status,
                 headers: _,
             } => {
+                log::info!("mock rule {:?}", body);
                 if let Some(status) = status {
                     builder = builder
                         .status(hyper::StatusCode::from_str(status).unwrap());
@@ -636,6 +661,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 forward_uri: _,
                 modify_response,
             } => {
+                log::info!("proxy rule {:?}", modify_response);
                 if let Some(modify_response) = modify_response {
                     if let Some(status) = &modify_response.status {
                         builder = builder.status(
