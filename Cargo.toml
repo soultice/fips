@@ -38,6 +38,9 @@ thiserror = "1.0.38"
 schemars = "0.8.11"
 crokey = "0.5.1"
 
+[build-dependencies]
+rustc_version = "0.4.0"
+
 [dependencies.gradient_tui_fork]
 git = "https://github.com/soultice/tui-rs.git"
 default-features = false

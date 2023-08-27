@@ -7,12 +7,6 @@
       functionAs: "Mock"
       body: "Hello World"
       status: "200"
-    with:
-      plugins:
-        - name: "foobar"
-          path: './plugins/libpluginname.so'
-          args:
-            - ""
       
 - Rule:
     name: "Static"
@@ -22,11 +16,3 @@
     then:
       functionAs: "Static"
       baseDir: "/home/fpfings"
-
-    with: 
-      plugins:
-        - name: "foobar"
-          path: './plugins/libpluginname.so'
-          args:
-            - ""
-

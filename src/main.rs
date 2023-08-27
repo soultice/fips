@@ -4,7 +4,7 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 use configuration::nconfiguration::NConfiguration;
 use tokio::runtime::Runtime;
 use clap::Parser;

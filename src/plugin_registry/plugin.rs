@@ -8,7 +8,10 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::{env, fs, io};
+use std::io;
+
+pub static CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 pub struct FunctionProxy {
     function: Arc<Box<dyn Function + Send>>,
@@ -72,11 +75,11 @@ impl ExternalFunctions {
             .read();
 
         // version checks to prevent accidental ABI incompatibilities
-        /*        if decl.rustc_version != plugins_core::RUSTC_VERSION
-            || decl.core_version != plugins_core::CORE_VERSION
+        if decl.rustc_version != RUSTC_VERSION
+            || decl.core_version != CORE_VERSION
         {
             return Err(io::Error::new(io::ErrorKind::Other, "Version mismatch"));
-        }*/
+        }
 
         let mut registrar = PluginRegistrar::new(Arc::clone(&library));
 
