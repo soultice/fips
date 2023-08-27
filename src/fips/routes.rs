@@ -68,7 +68,9 @@ pub async fn routes(
         log::info!("idx: {:?}", idx);
         let config_guard = configuration.lock().await;
         log::info!("guard {:?}", config_guard);
-        let rule = config_guard.rules[idx].into_inner();
+        let config_clone = config_guard.clone();
+        let rule = config_clone.rules[idx].into_inner();
+        drop(config_guard);
         log::info!("matching_rule: {:?}", rule);
         let mut holder = RuleAndIntermediaryHolder { rule, intermediary };
 

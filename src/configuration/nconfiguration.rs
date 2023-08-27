@@ -10,7 +10,7 @@ use regex::RegexSet;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -110,7 +110,7 @@ pub struct ModifyResponseProxy {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BodyManipulation {
     at: String,
-    with: String,
+    with: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -299,7 +299,7 @@ impl Default for NConfiguration {
 
 impl NConfiguration {
     pub fn load(
-        paths: &Vec<PathBuf>,
+        paths: &[PathBuf],
     ) -> Result<NConfiguration, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
@@ -334,7 +334,7 @@ impl NConfiguration {
         })
     }
 
-    pub fn reload(&mut self, paths: &Vec<PathBuf>) -> Result<(), String> {
+    pub fn reload(&mut self, paths: &[PathBuf]) -> Result<(), String> {
         //TODO enable plugin reload
         match NConfiguration::load(paths) {
             Ok(new_config) => {
@@ -597,6 +597,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             .fold(Response::builder(), |builder, (key, value)| {
                 builder.header(key, value)
             });
+        
+        builder.headers_mut().unwrap().remove("content-length");
 
         log::info!("Response from Intermediary");
 
@@ -617,9 +619,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
 
                     //morph body
                     if let Some(manipulator) = &modify.body {
-                        let mut body = holder.intermediary.body.clone();
                         manipulator.iter().for_each(|m| {
-                            body.dot_set(&m.at, &m.with).unwrap();
+                            preemtive_body.dot_set(&m.at, &m.with).unwrap();
                         });
                     }
 

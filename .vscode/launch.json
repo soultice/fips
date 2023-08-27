@@ -7,25 +7,6 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in library 'terminal_ui'",
-      "cargo": {
-        "args": [
-          "test",
-          "--no-run",
-          "--lib",
-          "--package=terminal_ui"
-        ],
-        "filter": {
-          "name": "terminal_ui",
-          "kind": "lib"
-        }
-      },
-      "args": [],
-      "cwd": "${workspaceFolder}"
-    },
-    {
-      "type": "lldb",
-      "request": "launch",
       "name": "Debug unit tests in library 'configuration'",
       "cargo": {
         "args": [
@@ -107,14 +88,16 @@
         "args": [
           "build",
           "--bin=fips",
-          "--package=fips"
+          "--package=fips",
         ],
         "filter": {
           "name": "fips",
           "kind": "bin"
         }
       },
-      "args": [],
+      "args": [
+        "--nconfig=./nconfig-test"
+      ],
       "cwd": "${workspaceFolder}"
     },
     {

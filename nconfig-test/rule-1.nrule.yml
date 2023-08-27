@@ -1,32 +1,53 @@
 - Rule:
-    name: "Rule 1"
+    name: "Mock 1"
     when:
       matchesUris:
-        - uri: /test
+        - uri: ^/test$
     then:
       functionAs: "Mock"
-      body: "{{TestPlugin}}"
+      body: 
+        foo: "{{TestPlugin}}"
       status: "200" 
 
     with:
       plugins:
         - name: "foobar"
           path: './plugins/libtest_plugin.so'
-   
+
 - Rule:
-    name: "Rule 2"
+    name: "FIPS 1"
     when:
       matchesUris:
-        - uri: /test/blabla
+        - uri: ^/fips$
     then:
-      functionAs: "Proxy"
-      forwardUri: "http://localhost:8000"
-      modifyRequest: 
-        keepHeaders:
-          - "Content-Type"
+      functionAs: "Fips"
+      forwardUri: "http://localhost:8888/test"
       modifyResponse: 
         keepHeaders:
           - "Content-Type"
+        body:
+          - at: "test"
+            with: "baz"
+          - at: "foobar"
+            with: 
+              - "new"
+              - "array"
+          - at: "plugin"
+            with: "{{TestPlugin}}"
 
+    with:
+      plugins:
+        - name: "foobar"
+          path: './plugins/libtest_plugin.so'
+   
+
+- Rule:
+    name: "Proxy"
+    when:
+      matchesUris:
+        - uri: ^/proxy$
+    then:
+      functionAs: "Proxy"
+      forwardUri: "http://localhost:8888/test"
   
   
