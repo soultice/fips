@@ -65,18 +65,20 @@ pub async fn routes(
 
     if let Some(idx) = matching_rule_idx {
         //add uri and route from configuration (enrich)
-        log::info!("idx: {:?}", idx);
         let config_guard = configuration.lock().await;
-        log::info!("guard {:?}", config_guard);
         let config_clone = config_guard.clone();
+
         let rule = config_clone.rules[idx].into_inner();
         drop(config_guard);
-        log::info!("matching_rule: {:?}", rule);
         let mut holder = RuleAndIntermediaryHolder { rule, intermediary };
 
-        log::info!("holder");
+        let info = Loggable {
+            message_type: LoggableType::Plain,
+            message: format!("Applying Rule {} {} {} ", holder.rule.name, holder.intermediary.method.clone().unwrap(), holder.intermediary.uri.clone().unwrap()),
+        };
+        (logging.0)(&info);
+
         let request = hyper::Request::try_from(&holder);
-        log::info!("request: {:?}", request);
 
         // Rule is forwarding (Proxy/FIPS)
         let resp = if let Ok(request) = request {

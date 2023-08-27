@@ -6,7 +6,7 @@
     then:
       functionAs: "Mock"
       body: 
-        foo: "{{TestPlugin}}"
+        foo: "bar"
       status: "200" 
 
     with:
