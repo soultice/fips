@@ -13,8 +13,6 @@ use crate::configuration::nconfiguration::NConfiguration;
 use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(not(feature = "ui"))]
-use fips_utility::log::Loggable;
-#[cfg(not(feature = "ui"))]
 use std::marker::PhantomData;
 #[cfg(not(feature = "ui"))]
 use std::any::Any;
@@ -56,6 +54,8 @@ pub fn spawn_backend(
 
 #[cfg(not(feature = "ui"))]
 fn define_log_callbacks() -> PaintLogsCallbacks {
+    use crate::utility::log::Loggable;
+
     let log = Box::new(|message: &Loggable| info!("{:?}", message.message));
     PaintLogsCallbacks(log)
 }
