@@ -1,9 +1,10 @@
 pub mod plugin;
 pub use plugin::ExternalFunctions;
 use serde_json::Value;
+use thiserror::Error;
 
 pub trait Function {
-    fn call(&self, args: Vec<Value>) -> Result<String, InvocationError>;
+    fn call(&self, args: Value) -> Result<String, InvocationError>;
 
     /// Help text that may be used to display information about this function.
     fn help(&self) -> Option<&str> {
@@ -11,18 +12,12 @@ pub trait Function {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Error)]
 pub enum InvocationError {
+    #[error("Invalid argument count: expected {expected}, found {found}")]
     InvalidArgumentCount { expected: usize, found: usize },
+    #[error("Plugin Error: {msg}")]
     Other { msg: String },
-}
-
-impl<S: ToString> From<S> for InvocationError {
-    fn from(other: S) -> InvocationError {
-        InvocationError::Other {
-            msg: other.to_string(),
-        }
-    }
 }
 
 pub struct PluginDeclaration {

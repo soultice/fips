@@ -1,4 +1,5 @@
 #![feature(async_fn_in_trait)]
+
 use std::alloc::System;
 
 #[global_allocator]

@@ -27,9 +27,19 @@ pub enum ConfigurationError {
     NoMethodError,
     #[error("Not forwarding as per rule definition")]
     NotForwarding,
+    #[error("Plugin invocation error: {0}")]
+    PluginInvocation(#[from] InvocationError),
+    #[error("Plugin not found error")]
+    PluginNotFound,
+    #[error("could not parse yaml")]
+    YamlParse(#[from] serde_yaml::Error),
+    #[error("could not parse json")]
+    JsonParse(#[from] serde_json::Error),
+    #[error("std error")]
+    Std(#[from] std::io::Error),
 }
 
-use crate::plugin_registry::ExternalFunctions;
+use crate::plugin_registry::{ExternalFunctions, InvocationError};
 
 use super::loader::{DeserializationError, YamlFileLoader};
 
@@ -117,7 +127,7 @@ pub struct BodyManipulation {
 pub struct Plugin {
     path: String,
     name: String,
-    args: Option<Vec<Value>>,
+    args: Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -376,17 +386,17 @@ pub struct Intermediary {
     pub uri: Option<Uri>,
 }
 
-pub trait AsyncFrom<T> {
+pub trait AsyncTryFrom<T> {
     type Output;
-    async fn async_from(t: T) -> Self::Output;
+    async fn async_try_from(t: T) -> Result<Self::Output, ConfigurationError>;
 }
 
-impl AsyncFrom<hyper::Response<hyper::Body>> for Intermediary {
+impl AsyncTryFrom<hyper::Response<hyper::Body>> for Intermediary {
     type Output = Intermediary;
 
-    async fn async_from(
+    async fn async_try_from(
         response: hyper::Response<hyper::Body>,
-    ) -> Intermediary {
+    ) -> Result<Intermediary, ConfigurationError> {
         let status = response.status();
         let mut headers = response.headers().clone();
         headers.remove("content-length");
@@ -395,19 +405,21 @@ impl AsyncFrom<hyper::Response<hyper::Body>> for Intermediary {
         let body = hyper::body::aggregate(body).await.unwrap().reader();
         let resp_json: serde_json::Value =
             serde_json::from_reader(body).unwrap_or_default();
-        Intermediary {
+        Ok(Intermediary {
             status,
             headers,
             body: resp_json,
             method: None,
             uri: None,
-        }
+        })
     }
 }
 
-impl AsyncFrom<hyper::Request<hyper::Body>> for Intermediary {
+impl AsyncTryFrom<hyper::Request<hyper::Body>> for Intermediary {
     type Output = Intermediary;
-    async fn async_from(request: hyper::Request<hyper::Body>) -> Intermediary {
+    async fn async_try_from(
+        request: hyper::Request<hyper::Body>,
+    ) -> Result<Intermediary, ConfigurationError> {
         let method = request.method().clone();
         let uri = request.uri().clone();
         let headers = request.headers().clone();
@@ -415,13 +427,13 @@ impl AsyncFrom<hyper::Request<hyper::Body>> for Intermediary {
         let body = hyper::body::aggregate(body).await.unwrap().reader();
         let req_json: serde_json::Value =
             serde_json::from_reader(body).unwrap_or_default();
-        Intermediary {
+        Ok(Intermediary {
             status: StatusCode::OK,
             headers,
             body: req_json,
             method: Some(method),
             uri: Some(uri),
-        }
+        })
     }
 }
 
@@ -466,18 +478,33 @@ pub struct RuleAndIntermediaryHolder<'a> {
 }
 
 impl RuleAndIntermediaryHolder<'_> {
-    pub fn apply_plugins(&self, next: &mut serde_json::Value) {
+    pub fn apply_plugins(
+        &self,
+        next: &mut serde_json::Value,
+    ) -> Result<(), ConfigurationError> {
         if let Some(plugins) = &self.rule.plugins {
             match next {
                 serde_json::Value::String(plugin_name) => {
                     if plugins.has(plugin_name) {
-                        let rule_plugins = &self.rule.clone().with.unwrap().plugins.unwrap();
-                        let plugin_config = rule_plugins.iter().find(|p| p.name == *plugin_name).unwrap();
-                        let plugin_args = plugin_config.args.clone().unwrap_or_default();
+                        let rule_plugins = &self
+                            .rule
+                            .clone()
+                            .with
+                            .ok_or(ConfigurationError::PluginNotFound)?
+                            .plugins
+                            .ok_or(ConfigurationError::PluginNotFound)?;
 
-                        let result = plugins
-                            .call(plugin_name, plugin_args)
-                            .expect("Invocation failed");
+                        let plugin_config = rule_plugins
+                            .iter()
+                            .find(|p| p.name == *plugin_name)
+                            .ok_or(ConfigurationError::PluginNotFound)?;
+
+                        let plugin_args =
+                            plugin_config.args.clone().unwrap_or_default();
+
+                        let result = plugins.call(plugin_name, plugin_args)?;
+
+                        // try to deserialize, if it fails, parse it into a string
                         let try_serialize = serde_json::from_str(&result);
                         if let Ok(i) = try_serialize {
                             *next = i;
@@ -488,7 +515,7 @@ impl RuleAndIntermediaryHolder<'_> {
                 }
                 serde_json::Value::Array(val) => {
                     for i in val {
-                        self.apply_plugins(i);
+                        self.apply_plugins(i)?;
                     }
                 }
                 serde_json::Value::Object(val) => {
@@ -498,12 +525,11 @@ impl RuleAndIntermediaryHolder<'_> {
                         (Some(p), Some(a)) => {
                             if let (
                                 serde_json::Value::String(function),
-                                serde_json::Value::Array(arguments),
+                                arguments,
                             ) = (p, a)
                             {
                                 let result = plugins
-                                    .call(function, arguments.clone())
-                                    .expect("Invocation failed");
+                                    .call(function, arguments.clone())?;
                                 let try_serialize =
                                     serde_json::from_str(&result);
                                 if let Ok(i) = try_serialize {
@@ -515,7 +541,7 @@ impl RuleAndIntermediaryHolder<'_> {
                         }
                         _ => {
                             for (_, i) in val {
-                                self.apply_plugins(i);
+                                self.apply_plugins(i)?;
                             }
                         }
                     }
@@ -523,6 +549,7 @@ impl RuleAndIntermediaryHolder<'_> {
                 _ => {}
             }
         }
+        Ok(())
     }
 }
 
@@ -562,17 +589,23 @@ impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
                 headers: _,
             } => return Err(ConfigurationError::NotForwarding),
         };
-        builder = builder.method(holder.intermediary.method.clone().unwrap());
-        Ok(builder
-            .body(Body::from(holder.intermediary.body.to_string()))
-            .unwrap())
+        builder = builder.method(
+            holder
+                .intermediary
+                .method
+                .clone()
+                .ok_or(ConfigurationError::NoMethodError)?,
+        );
+        Ok(builder.body(Body::from(holder.intermediary.body.to_string()))?)
     }
 }
 
 // convert to response
-impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
+impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
     type Output = Response<Body>;
-    async fn async_from(holder: RuleAndIntermediaryHolder<'_>) -> Self {
+    async fn async_try_from(
+        holder: RuleAndIntermediaryHolder<'_>,
+    ) -> Result<Self, ConfigurationError> {
         let preemtive_body = &mut holder.intermediary.body.clone();
 
         let mut builder = holder
@@ -582,7 +615,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             .fold(Response::builder(), |builder, (key, value)| {
                 builder.header(key, value)
             });
-        
+
         builder.headers_mut().unwrap().remove("content-length");
 
         match &holder.rule.then {
@@ -617,7 +650,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
 
                     if let Some(add_headers) = &modify.set_headers {
                         for (key, value) in add_headers.iter() {
-                            if builder.headers_mut().unwrap().contains_key(key) {
+                            if builder.headers_mut().unwrap().contains_key(key)
+                            {
                                 builder.headers_mut().unwrap().remove(key);
                             }
                             builder = builder.header(key, value);
@@ -629,7 +663,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             Then::Mock {
                 body,
                 status,
-                headers
+                headers,
             } => {
                 if let Some(status) = status {
                     builder = builder
@@ -696,7 +730,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                         )
                         .build(static_path)
                         .unwrap();
-                    return resp;
+                    return Ok(resp);
                 }
             }
         };
@@ -712,7 +746,7 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
 
         holder.apply_plugins(preemtive_body);
         let resp_body = Body::from(preemtive_body.to_string());
-        
-        builder.body(resp_body).unwrap()
+
+        Ok(builder.body(resp_body).unwrap())
     }
 }

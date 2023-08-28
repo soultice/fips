@@ -1,7 +1,7 @@
 use crate::{
     configuration::nconfiguration::{
-        AsyncFrom, Intermediary, NConfiguration, RuleAndIntermediaryHolder,
-        RuleSet,
+        AsyncTryFrom, Intermediary, NConfiguration, RuleAndIntermediaryHolder,
+        RuleSet, ConfigurationError,
     },
     utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo},
     PaintLogsCallbacks,
@@ -11,15 +11,27 @@ use hyper::{
     header::{HeaderMap, HeaderValue},
     Body, Client, Method, Request, Response, StatusCode,
 };
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum RoutingError {
+    #[error("http error")]
+    HttpHyper(#[from] hyper::Error),
+    #[error("http error")]
+    Http(#[from] http::Error),
+    #[error("Configuration Error")]
+    Configuration(#[from] ConfigurationError)
+}
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
 pub async fn routes(
     req: Request<Body>,
     configuration: Arc<AsyncMutex<NConfiguration>>,
     logging: &Arc<PaintLogsCallbacks>,
-) -> Result<Response<Body>, hyper::Error> {
+) -> Result<Response<Body>, RoutingError> {
     let requestinfo = RequestInfo::from(&req);
 
     let log_output = Loggable {
@@ -28,7 +40,7 @@ pub async fn routes(
     };
     (logging.0)(&log_output);
 
-    let intermediary = Intermediary::async_from(req).await;
+    let intermediary = Intermediary::async_try_from(req).await?;
 
     let c = intermediary.clone();
     //TODO clean up adding cors, have rule that makes sense here
@@ -103,13 +115,13 @@ pub async fn routes(
             };
             (logging.0)(&log_output);
 
-            let inter = Intermediary::async_from(resp).await;
+            let inter = Intermediary::async_try_from(resp).await?;
             holder.intermediary = inter;
-            let resp = Response::async_from(holder).await;
+            let resp = Response::async_try_from(holder).await?;
             Ok(resp)
         } else {
             // rule isnt forwarding
-            let resp = Response::async_from(holder).await;
+            let resp = Response::async_try_from(holder).await?;
             Ok(resp)
         };
 

@@ -19,7 +19,7 @@ pub struct FunctionProxy {
 }
 
 impl Function for FunctionProxy {
-    fn call(&self, args: Vec<Value>) -> Result<String, InvocationError> {
+    fn call(&self, args: Value) -> Result<String, InvocationError> {
         self.function.call(args)
     }
 
@@ -106,12 +106,15 @@ impl ExternalFunctions {
     pub fn call(
         &self,
         function: &str,
-        arguments: Vec<Value>,
+        arguments: Value,
     ) -> Result<String, InvocationError> {
         self.functions
             .lock().unwrap()
             .get(function)
-            .ok_or_else(|| format!("\"{function}\" not found"))?
+            .ok_or(InvocationError::Other {
+                msg: format!("Function {function} not found"),
+            })
+            ?
             .call(arguments)
     }
 
