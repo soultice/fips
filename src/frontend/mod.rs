@@ -33,7 +33,6 @@ use crate::{
     },
     PaintLogsCallbacks,
 };
-use log::info;
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -91,7 +90,7 @@ pub async fn spawn_frontend(
         let captured_state = unwrapped_app.state.clone();
         Box::new(move |panic_info| {
             captured_state
-                .add_message(PrintInfo::PLAIN(panic_info.to_string()))
+                .add_message(PrintInfo::Plain(panic_info.to_string()))
                 .unwrap_or_default();
         })
     });
@@ -175,11 +174,10 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
             }
             LoggableType::Plain => {
                 inner_state
-                    .add_message(PrintInfo::PLAIN(message.message.clone()))
+                    .add_message(PrintInfo::Plain(message.message.clone()))
                     .unwrap();
             }
         }
-        info!("{:?}", message.message)
     });
     PaintLogsCallbacks(log)
 }

@@ -200,12 +200,9 @@ impl Rule {
         )
         .unwrap();
 
-        log::info!("uri_regex: {:?}", uri_regex);
-
         let uri = intermediary.clone().uri.unwrap();
 
         let some_uris_match = uri_regex.is_match(uri.path());
-        log::info!("some_uris_match: {:?}", some_uris_match);
         if !some_uris_match {
             return false;
         }
@@ -217,7 +214,6 @@ impl Rule {
                     .any(|m| m == intermediary.clone().method.unwrap().as_str())
             });
 
-        log::info!("some_methods_match: {:?}", some_methods_match);
         if !some_methods_match {
             return false;
         }
@@ -229,7 +225,7 @@ impl Rule {
                 .map_or(true, |body_contains| {
                     intermediary.body.as_str().unwrap().contains(body_contains)
                 });
-        log::info!("some_body_contains: {:?}", some_body_contains);
+
         if !some_body_contains {
             return false;
         }
@@ -249,7 +245,6 @@ impl Rule {
             })
             .unwrap_or(true);
 
-        log::info!("probability_matches: {:?}", probability_matches);
         if !probability_matches {
             return false;
         }
@@ -324,8 +319,6 @@ impl NConfiguration {
             }
         }
 
-        log::info!("Loaded rules: {:?}", rules);
-
         Ok(NConfiguration {
             //all rules are active initially
             active_rule_indices: (0..rules.len()).collect(),
@@ -357,21 +350,10 @@ impl NConfiguration {
     }
 
     pub fn toggle_rule(&mut self) {
-        log::info!("Toggling rule: {}", self.fe_selected_rule);
         if self.active_rule_indices.contains(&self.fe_selected_rule) {
             self.remove_from_active_indices();
-            log::info!(
-                "Removed rule: {}, {:?}",
-                self.fe_selected_rule,
-                self.active_rule_indices
-            );
         } else {
             self.add_to_active_indices();
-            log::info!(
-                "Removed rule: {}, {:?}",
-                self.fe_selected_rule,
-                self.active_rule_indices
-            );
         }
     }
 
@@ -486,12 +468,11 @@ pub struct RuleAndIntermediaryHolder<'a> {
 impl RuleAndIntermediaryHolder<'_> {
     pub fn apply_plugins(&self, next: &mut serde_json::Value) {
         if let Some(plugins) = &self.rule.plugins {
-            log::info!("Plugins: {:?}, next: {:?}", plugins, next);
             match next {
                 serde_json::Value::String(val) => {
-                    if plugins.has(&val) {
+                    if plugins.has(val) {
                         let result = plugins
-                            .call(&val, vec![])
+                            .call(val, vec![])
                             .expect("Invocation failed");
                         let try_serialize = serde_json::from_str(&result);
                         if let Ok(i) = try_serialize {
@@ -600,8 +581,6 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
         
         builder.headers_mut().unwrap().remove("content-length");
 
-        log::info!("Response from Intermediary");
-
         match &holder.rule.then {
             //plugins/transformation/status/headers
             //TODO plugins
@@ -609,7 +588,6 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 forward_uri: _,
                 modify_response,
             } => {
-                log::info!("fips rule {:?}", modify_response);
                 if let Some(modify) = modify_response {
                     if let Some(status) = &modify.status {
                         builder = builder.status(
@@ -644,9 +622,8 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             Then::Mock {
                 body,
                 status,
-                headers: _,
+                headers
             } => {
-                log::info!("mock rule {:?}", body);
                 if let Some(status) = status {
                     builder = builder
                         .status(hyper::StatusCode::from_str(status).unwrap());
@@ -656,13 +633,17 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 if let Some(body) = body {
                     *preemtive_body = body.clone();
                 }
+                if let Some(headers) = headers {
+                    for (key, value) in headers.iter() {
+                        builder = builder.header(key, value);
+                    }
+                }
             }
             //headers
             Then::Proxy {
                 forward_uri: _,
                 modify_response,
             } => {
-                log::info!("proxy rule {:?}", modify_response);
                 if let Some(modify_response) = modify_response {
                     if let Some(status) = &modify_response.status {
                         builder = builder.status(
@@ -687,11 +668,6 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             }
             //nothing
             Then::Static { static_base_dir } => {
-                log::info!(
-                    "static base dir: {:?}, uri: {}",
-                    static_base_dir,
-                    holder.intermediary.uri.as_ref().unwrap()
-                );
                 if let Some(path) = static_base_dir {
                     let static_path = hyper_staticfile::resolve_path(
                         path,
@@ -718,15 +694,18 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             }
         };
 
-        // CORS headers are always added to response
-        builder = builder.header("Access-Control-Allow-Origin", "*");
-        builder = builder.header("Access-Control-Allow-Methods", "*");
+        // CORS headers are always added to preflight response
+        // FIXME: check if headers are already present, if so overwrite them
+        if holder.intermediary.method.as_ref() == Some(&Method::OPTIONS) {
+            builder = builder.header("Access-Control-Allow-Origin", "*");
+            builder = builder.header("Access-Control-Allow-Methods", "*");
+            builder = builder.header("Access-Control-Allow-Headers", "*");
+            builder = builder.header("Access-Control-Max-Age", "86400");
+        }
 
         holder.apply_plugins(preemtive_body);
-        log::info!("after plugins: {:?}", preemtive_body);
         let resp_body = Body::from(preemtive_body.to_string());
-        let resp = builder.body(resp_body).unwrap();
-        log::info!("response: {:?}", resp);
-        resp
+        
+        builder.body(resp_body).unwrap()
     }
 }

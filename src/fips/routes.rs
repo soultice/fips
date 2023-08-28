@@ -11,7 +11,7 @@ use hyper::{
     header::{HeaderMap, HeaderValue},
     Body, Client, Method, Request, Response, StatusCode,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use tokio::sync::Mutex as AsyncMutex;
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
@@ -106,12 +106,10 @@ pub async fn routes(
             let inter = Intermediary::async_from(resp).await;
             holder.intermediary = inter;
             let resp = Response::async_from(holder).await;
-            log::info!("resp: {:?}", resp);
             Ok(resp)
         } else {
             // rule isnt forwarding
             let resp = Response::async_from(holder).await;
-            log::info!("resp from non-forwading: {:?}", resp);
             Ok(resp)
         };
 

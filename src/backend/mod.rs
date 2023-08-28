@@ -4,13 +4,12 @@ use hyper::{
     Body, Request, Server,
 };
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
 use crate::configuration::nconfiguration::NConfiguration;
-use crate::ExternalFunctions;
 use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(not(feature = "ui"))]

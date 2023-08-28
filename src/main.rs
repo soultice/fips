@@ -10,7 +10,6 @@ use tokio::runtime::Runtime;
 use clap::Parser;
 use std::fs::File;
 
-mod client;
 mod fips;
 mod backend;
 mod configuration;
@@ -22,7 +21,7 @@ use crate::configuration::nconfiguration::RuleSet;
 use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
 
-use crate::plugin_registry::ExternalFunctions;
+
 use tokio::sync::Mutex as AsyncMutex;
 
 

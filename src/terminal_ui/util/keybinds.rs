@@ -26,7 +26,7 @@ pub async fn match_keybinds(
                     .await
                     .reload(&app.opts.nconfig)?;
                 app.state
-                    .add_message(PrintInfo::PLAIN(String::from(
+                    .add_message(PrintInfo::Plain(String::from(
                         "Config files reloaded",
                     )))
                     .unwrap_or_default();

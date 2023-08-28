@@ -3,7 +3,7 @@ use gradient_tui_fork::{
     text::Spans,
     widgets::{List, ListItem},
 };
-use std::sync::Mutex;
+
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::configuration::nconfiguration::NConfiguration;

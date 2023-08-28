@@ -2,12 +2,15 @@
     name: "Mock 1"
     when:
       matchesUris:
-        - uri: ^/test$
+        - uri: ^/mock$
     then:
       functionAs: "Mock"
       body: 
         foo: "bar"
       status: "200" 
+      headers:
+        Content-Type: "application/json"
+        X-Test: "test"
 
     with:
       plugins:
@@ -21,7 +24,7 @@
         - uri: ^/fips$
     then:
       functionAs: "Fips"
-      forwardUri: "http://localhost:8888/test"
+      forwardUri: "http://localhost:8888/mock"
       modifyResponse: 
         keepHeaders:
           - "Content-Type"
