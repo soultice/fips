@@ -91,8 +91,8 @@ pub struct ModifyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ModifyResponseFips {
     #[serde(rename = "setHeaders")]
-    add_headers: Option<HashMap<String, String>>,
-    #[serde(rename = "keepHeaders")]
+    set_headers: Option<HashMap<String, String>>,
+    #[serde(rename = "deleteHeaders")]
     delete_headers: Option<Vec<String>>,
     body: Option<Vec<BodyManipulation>>,
     status: Option<String>,
@@ -469,10 +469,14 @@ impl RuleAndIntermediaryHolder<'_> {
     pub fn apply_plugins(&self, next: &mut serde_json::Value) {
         if let Some(plugins) = &self.rule.plugins {
             match next {
-                serde_json::Value::String(val) => {
-                    if plugins.has(val) {
+                serde_json::Value::String(plugin_name) => {
+                    if plugins.has(plugin_name) {
+                        let rule_plugins = &self.rule.clone().with.unwrap().plugins.unwrap();
+                        let plugin_config = rule_plugins.iter().find(|p| p.name == *plugin_name).unwrap();
+                        let plugin_args = plugin_config.args.clone().unwrap_or_default();
+
                         let result = plugins
-                            .call(val, vec![])
+                            .call(plugin_name, plugin_args)
                             .expect("Invocation failed");
                         let try_serialize = serde_json::from_str(&result);
                         if let Ok(i) = try_serialize {
@@ -611,8 +615,11 @@ impl AsyncFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                         }
                     }
 
-                    if let Some(add_headers) = &modify.add_headers {
+                    if let Some(add_headers) = &modify.set_headers {
                         for (key, value) in add_headers.iter() {
+                            if builder.headers_mut().unwrap().contains_key(key) {
+                                builder.headers_mut().unwrap().remove(key);
+                            }
                             builder = builder.header(key, value);
                         }
                     }

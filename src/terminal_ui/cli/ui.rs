@@ -138,7 +138,7 @@ fn draw_rules_tab<B>(
         Style::default()
             .fg(Color::Blue)
             .add_modifier(Modifier::BOLD),
-    ));
+    )).border_gradients(_app.gradients.clone());
     let constraints = vec![Constraint::Min(5)];
     let chunks = Layout::default()
         .constraints(constraints.as_ref())

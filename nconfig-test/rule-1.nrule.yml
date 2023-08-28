@@ -13,7 +13,7 @@
         X-Test: "test"
 
     with:
-      plugins:
+      plugins: &plugins
         - name: "foobar"
           path: './plugins/libtest_plugin.so'
 
@@ -26,22 +26,25 @@
       functionAs: "Fips"
       forwardUri: "http://localhost:8888/mock"
       modifyResponse: 
-        keepHeaders:
-          - "Content-Type"
+        setHeaders:
+          x-test: "test-fips" 
         body:
-          - at: "test"
-            with: "baz"
           - at: "foobar"
             with: 
               - "new"
               - "array"
-          - at: "plugin"
-            with: "{{TestPlugin}}"
+          - at: "plugin-result"
+            with: "{{RandomProductCode}}"
 
     with:
+      #sleep: 10000
       plugins:
-        - name: "foobar"
-          path: './plugins/libtest_plugin.so'
+        - name: "{{RandomProductCode}}"
+          path: './plugins/librandom_product_code.so'
+          args:
+            - "de"
+            - "DE"
+            - 1770
    
 
 - Rule:

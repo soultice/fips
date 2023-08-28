@@ -66,7 +66,7 @@ impl ExternalFunctions {
         library_path: P,
     ) -> io::Result<()> {
         // load the library into memory
-        let library = Arc::new(Library::new(library_path).unwrap()); //?);
+        let library = Arc::new(Library::new(library_path).unwrap()); 
 
         // get a pointer to the plugin_declaration symbol.
         let decl = library

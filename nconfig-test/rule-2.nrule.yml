@@ -2,7 +2,7 @@
     name: "Mock"
     when:
       matchesUris:
-        - uri: ^/mock.*
+        - uri: ^/mock$
     then: 
       functionAs: "Mock"
       body: "Hello World"
