@@ -15,6 +15,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
 use thiserror::Error;
+use eyre::Result;
 
 #[derive(Error, Debug)]
 pub enum RoutingError {
@@ -31,7 +32,7 @@ pub async fn routes(
     req: Request<Body>,
     configuration: Arc<AsyncMutex<NConfiguration>>,
     logging: &Arc<PaintLogsCallbacks>,
-) -> Result<Response<Body>, RoutingError> {
+) -> Result<Response<Body>> {
     let requestinfo = RequestInfo::from(&req);
 
     let log_output = Loggable {
@@ -64,7 +65,7 @@ pub async fn routes(
             } else {
                 match rule {
                     RuleSet::Rule(rule) => {
-                        if rule.should_apply(&intermediary) {
+                        if rule.should_apply(&intermediary).is_ok() {
                             Some(idx)
                         } else {
                             None

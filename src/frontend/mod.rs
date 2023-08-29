@@ -89,6 +89,7 @@ pub async fn spawn_frontend(
     panic::set_hook({
         let captured_state = unwrapped_app.state.clone();
         Box::new(move |panic_info| {
+            log::error!("Panic: {}", panic_info);
             captured_state
                 .add_message(PrintInfo::Plain(panic_info.to_string()))
                 .unwrap_or_default();

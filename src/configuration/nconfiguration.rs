@@ -1,4 +1,5 @@
 use bytes::Buf;
+use eyre::{Context, ContextCompat, Result};
 use http::{
     header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
 };
@@ -37,6 +38,10 @@ pub enum ConfigurationError {
     JsonParse(#[from] serde_json::Error),
     #[error("std error")]
     Std(#[from] std::io::Error),
+    #[error("hyper lib error")]
+    Hyper(#[from] hyper::Error),
+    #[error("rule does not match")]
+    RuleDoesNotMatch,
 }
 
 use crate::plugin_registry::{ExternalFunctions, InvocationError};
@@ -198,7 +203,7 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn should_apply(&self, intermediary: &Intermediary) -> bool {
+    pub fn should_apply(&self, intermediary: &Intermediary) -> Result<()> {
         let mut rng = rand::thread_rng();
 
         let uri_regex = RegexSet::new(
@@ -207,14 +212,13 @@ impl Rule {
                 .iter()
                 .map(|m| m.uri.as_str())
                 .collect::<Vec<&str>>(),
-        )
-        .unwrap();
+        )?;
 
-        let uri = intermediary.clone().uri.unwrap();
+        let uri = intermediary.clone().uri.wrap_err("could not retrieve uri")?;
 
         let some_uris_match = uri_regex.is_match(uri.path());
         if !some_uris_match {
-            return false;
+            return Err(ConfigurationError::RuleDoesNotMatch.into());
         }
 
         let some_methods_match =
@@ -225,7 +229,7 @@ impl Rule {
             });
 
         if !some_methods_match {
-            return false;
+            return Err(ConfigurationError::RuleDoesNotMatch.into());
         }
 
         let some_body_contains =
@@ -237,7 +241,7 @@ impl Rule {
                 });
 
         if !some_body_contains {
-            return false;
+            return Err(ConfigurationError::RuleDoesNotMatch.into());
         }
 
         let probability_matches = self
@@ -256,10 +260,10 @@ impl Rule {
             .unwrap_or(true);
 
         if !probability_matches {
-            return false;
+            return Err(ConfigurationError::RuleDoesNotMatch.into());
         }
 
-        true
+        Ok(())
     }
 }
 
@@ -309,6 +313,10 @@ impl NConfiguration {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
         let mut rules = loader.load_from_directories(paths)?;
+
+        if rules.is_empty() {
+            return Ok(NConfiguration::default())
+        }
 
         //load plugins
         for rule in &mut rules {
@@ -388,7 +396,7 @@ pub struct Intermediary {
 
 pub trait AsyncTryFrom<T> {
     type Output;
-    async fn async_try_from(t: T) -> Result<Self::Output, ConfigurationError>;
+    async fn async_try_from(t: T) -> Result<Self::Output>;
 }
 
 impl AsyncTryFrom<hyper::Response<hyper::Body>> for Intermediary {
@@ -396,13 +404,13 @@ impl AsyncTryFrom<hyper::Response<hyper::Body>> for Intermediary {
 
     async fn async_try_from(
         response: hyper::Response<hyper::Body>,
-    ) -> Result<Intermediary, ConfigurationError> {
+    ) -> Result<Intermediary> {
         let status = response.status();
         let mut headers = response.headers().clone();
         headers.remove("content-length");
 
         let body = response.into_body();
-        let body = hyper::body::aggregate(body).await.unwrap().reader();
+        let body = hyper::body::aggregate(body).await?.reader();
         let resp_json: serde_json::Value =
             serde_json::from_reader(body).unwrap_or_default();
         Ok(Intermediary {
@@ -419,12 +427,12 @@ impl AsyncTryFrom<hyper::Request<hyper::Body>> for Intermediary {
     type Output = Intermediary;
     async fn async_try_from(
         request: hyper::Request<hyper::Body>,
-    ) -> Result<Intermediary, ConfigurationError> {
+    ) -> Result<Intermediary> {
         let method = request.method().clone();
         let uri = request.uri().clone();
         let headers = request.headers().clone();
         let body = request.into_body();
-        let body = hyper::body::aggregate(body).await.unwrap().reader();
+        let body = hyper::body::aggregate(body).await?.reader();
         let req_json: serde_json::Value =
             serde_json::from_reader(body).unwrap_or_default();
         Ok(Intermediary {
@@ -605,8 +613,9 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
     type Output = Response<Body>;
     async fn async_try_from(
         holder: RuleAndIntermediaryHolder<'_>,
-    ) -> Result<Self, ConfigurationError> {
+    ) -> Result<Self> {
         let preemtive_body = &mut holder.intermediary.body.clone();
+        let preemtive_header_map = &mut holder.intermediary.headers.clone();
 
         let mut builder = holder
             .intermediary
@@ -616,7 +625,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 builder.header(key, value)
             });
 
-        builder.headers_mut().unwrap().remove("content-length");
+        builder.headers_mut().wrap_err("hyper object has no headers")?.remove("content-length");
+        preemtive_header_map.remove(HeaderName::from_static("content-length"));
 
         match &holder.rule.then {
             //plugins/transformation/status/headers
@@ -627,32 +637,31 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             } => {
                 if let Some(modify) = modify_response {
                     if let Some(status) = &modify.status {
-                        builder = builder.status(
-                            hyper::StatusCode::from_str(status).unwrap(),
-                        );
+                        builder = builder
+                            .status(hyper::StatusCode::from_str(status)?);
                     }
 
                     //morph body
                     if let Some(manipulator) = &modify.body {
                         manipulator.iter().for_each(|m| {
-                            preemtive_body.dot_set(&m.at, &m.with).unwrap();
+                            preemtive_body
+                                .dot_set(&m.at, &m.with)
+                                .wrap_err("invalid 'at' in rule").unwrap();
                         });
                     }
 
                     if let Some(headers) = &modify.delete_headers {
-                        let headers_mut = builder.headers_mut().unwrap();
                         for h in headers {
-                            if headers_mut.contains_key(h) {
-                                headers_mut.remove(h);
+                            if preemtive_header_map.contains_key(h) {
+                                preemtive_header_map.remove(h);
                             }
                         }
                     }
 
                     if let Some(add_headers) = &modify.set_headers {
                         for (key, value) in add_headers.iter() {
-                            if builder.headers_mut().unwrap().contains_key(key)
-                            {
-                                builder.headers_mut().unwrap().remove(key);
+                            if preemtive_header_map.contains_key(key) {
+                                preemtive_header_map.remove(key);
                             }
                             builder = builder.header(key, value);
                         }
@@ -666,8 +675,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 headers,
             } => {
                 if let Some(status) = status {
-                    builder = builder
-                        .status(hyper::StatusCode::from_str(status).unwrap());
+                    builder =
+                        builder.status(hyper::StatusCode::from_str(status)?);
                 } else {
                     builder = builder.status(hyper::StatusCode::OK)
                 }
@@ -676,7 +685,10 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 }
                 if let Some(headers) = headers {
                     for (key, value) in headers.iter() {
-                        builder = builder.header(key, value);
+                        preemtive_header_map.insert(
+                            HeaderName::from_str(key)?,
+                            HeaderValue::from_str(value)?,
+                        );
                     }
                 }
             }
@@ -687,21 +699,23 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
             } => {
                 if let Some(modify_response) = modify_response {
                     if let Some(status) = &modify_response.status {
-                        builder = builder.status(
-                            hyper::StatusCode::from_str(status).unwrap(),
-                        );
+                        builder = builder
+                            .status(hyper::StatusCode::from_str(status)?);
                     }
                     if let Some(add_headers) = &modify_response.add_headers {
                         for (key, value) in add_headers.iter() {
-                            builder = builder.header(key, value);
+                            preemtive_header_map.insert(
+                                HeaderName::from_str(key)?,
+                                HeaderValue::from_str(value)?,
+                            );
                         }
                     }
                     if let Some(delete_headers) =
                         &modify_response.delete_headers
                     {
                         for h in delete_headers {
-                            if builder.headers_mut().unwrap().contains_key(h) {
-                                builder.headers_mut().unwrap().remove(h);
+                            if preemtive_header_map.contains_key(h) {
+                                preemtive_header_map.remove(h);
                             }
                         }
                     }
@@ -712,24 +726,28 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
                 if let Some(path) = static_base_dir {
                     let static_path = hyper_staticfile::resolve_path(
                         path,
-                        holder.intermediary.uri.clone().unwrap().path(),
+                        holder
+                            .intermediary
+                            .uri
+                            .clone()
+                            .wrap_err("could not retrieve uri")?
+                            .path(),
                     )
                     .await
                     .unwrap();
 
                     let header_name = HeaderName::from_static("x-static");
-                    let header_value = HeaderValue::from_str(path).unwrap();
+                    let header_value = HeaderValue::from_str(path)?;
                     let resp = hyper_staticfile::ResponseBuilder::new()
                         .request_parts(
-                            holder.intermediary.method.as_ref().unwrap(),
-                            &holder.intermediary.uri.clone().unwrap(),
+                            holder.intermediary.method.as_ref().wrap_err("could not retrieve method")?,
+                            &holder.intermediary.uri.clone().wrap_err("could not retrieve uri")?,
                             &HeaderMap::from_iter(vec![(
                                 header_name,
                                 header_value,
                             )]),
                         )
-                        .build(static_path)
-                        .unwrap();
+                        .build(static_path)?;
                     return Ok(resp);
                 }
             }
@@ -738,15 +756,40 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
         // CORS headers are always added to preflight response
         // FIXME: check if headers are already present, if so overwrite them
         if holder.intermediary.method.as_ref() == Some(&Method::OPTIONS) {
-            builder = builder.header("Access-Control-Allow-Origin", "*");
-            builder = builder.header("Access-Control-Allow-Methods", "*");
-            builder = builder.header("Access-Control-Allow-Headers", "*");
-            builder = builder.header("Access-Control-Max-Age", "86400");
+            preemtive_header_map.insert(
+                HeaderName::from_static("Access-Control-Allow-Origin"),
+                HeaderValue::from_static("*"),
+            );
+            preemtive_header_map.insert(
+                HeaderName::from_static("Access-Control-Allow-Methods"),
+                HeaderValue::from_static("*"),
+            );
+            preemtive_header_map.insert(
+                HeaderName::from_static("Access-Control-Allow-Headers"),
+                HeaderValue::from_static("*"),
+            );
+            preemtive_header_map.insert(
+                HeaderName::from_static("Access-Control-Max-Age"),
+                HeaderValue::from_static("86400"),
+            );
         }
 
-        holder.apply_plugins(preemtive_body);
+        holder.apply_plugins(preemtive_body)?;
+
         let resp_body = Body::from(preemtive_body.to_string());
 
-        Ok(builder.body(resp_body).unwrap())
+        //flush the header map
+        builder
+            .headers_mut()
+            .wrap_err("hyper object has no headers")?
+            .clear();
+
+
+        builder
+            .headers_mut()
+            .wrap_err("hyper object has no headers")?
+            .extend(preemtive_header_map.clone());
+
+        Ok(builder.body(resp_body)?)
     }
 }
