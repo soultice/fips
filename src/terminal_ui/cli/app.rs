@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::{utility::options::CliOptions, terminal_ui::util::TabsState};
 
 use super::state::State;
+use eyre::Result;
 
 const REQUEST_TAB_NAME: &str = "Requests";
 const TRAFFIC_TAB_NAME: &str = "Traffic";
@@ -56,7 +57,7 @@ impl<'a> App<'a> {
         self.tabs.previous();
     }
 
-    pub fn on_tick(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn on_tick(&mut self) -> Result<()> {
         if self.direction == Dir::Add {
             if let Some(s) = self.glow_interval.checked_add(5) {
                 self.glow_interval = s;

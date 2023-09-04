@@ -96,7 +96,7 @@
         }
       },
       "args": [
-        "--nconfig=./nconfig-test"
+        "--nconfig=."
       ],
       "cwd": "${workspaceFolder}"
     },

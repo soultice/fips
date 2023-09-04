@@ -79,6 +79,7 @@ impl YamlFileLoader {
 
         for file in all_files {
             let deserialized_rules = self.deserialize_file(Ok(file))?;
+            log::info!("deserialized rules: {:?}", deserialized_rules);
             dir_contents.extend(deserialized_rules);
         }
         Ok(dir_contents)

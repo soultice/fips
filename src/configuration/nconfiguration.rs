@@ -1,5 +1,5 @@
 use bytes::Buf;
-use eyre::{Context, ContextCompat, Result};
+use eyre::{Context, ContextCompat, Result, eyre};
 use http::{
     header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
 };
@@ -345,7 +345,7 @@ impl NConfiguration {
         })
     }
 
-    pub fn reload(&mut self, paths: &[PathBuf]) -> Result<(), String> {
+    pub fn reload(&mut self, paths: &[PathBuf]) -> Result<()> {
         //TODO enable plugin reload
         match NConfiguration::load(paths) {
             Ok(new_config) => {
@@ -354,7 +354,7 @@ impl NConfiguration {
                 self.fe_selected_rule = new_config.fe_selected_rule;
                 Ok(())
             }
-            Err(e) => Err(format!("Error reloading config: {e:?}")),
+            Err(e) => Err(eyre!("Error reloading config: {e:?}")),
         }
     }
 
@@ -755,6 +755,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
 
         // CORS headers are always added to preflight response
         // FIXME: check if headers are already present, if so overwrite them
+        log::info!("method: {:?}", holder.intermediary.method);
         if holder.intermediary.method.as_ref() == Some(&Method::OPTIONS) {
             preemtive_header_map.insert(
                 HeaderName::from_static("Access-Control-Allow-Origin"),

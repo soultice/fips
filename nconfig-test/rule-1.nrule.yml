@@ -6,7 +6,8 @@
     then:
       functionAs: "Mock"
       body: 
-        foo: "bar"
+        foo: bar
+        # foo: "{{TestPlugin}}"
       status: "200" 
       headers:
         Content-Type: "application/json"
@@ -14,8 +15,17 @@
 
     with:
       plugins: &plugins
-        - name: "foobar"
+        - name: "{{TestPlugin}}"
           path: './plugins/libtest_plugin.so'
+
+- Rule:
+    name: "Proxy"
+    when:
+      matchesUris:
+        - uri: ^/proxy$
+    then:
+      functionAs: "Proxy"
+      forwardUri: "http://localhost:8888/mock"
 
 - Rule:
     name: "FIPS 1"
@@ -33,27 +43,24 @@
             with: 
               - "new"
               - "array"
+          - at: "foobar.1"
+            with: "replaced-value"
+          - at: "foobar.>>"
+            with: "appended-value"
           - at: "plugin-result"
             with: "{{RandomProductCode}}"
 
     with:
-      #sleep: 10000
+      # sleep: 10000
       plugins:
         - name: "{{RandomProductCode}}"
           path: './plugins/librandom_product_code.so'
           args:
             - "de"
             - "DE"
-            - 1770
+            - 1771
    
 
-- Rule:
-    name: "Proxy"
-    when:
-      matchesUris:
-        - uri: ^/proxy$
-    then:
-      functionAs: "Proxy"
-      forwardUri: "http://localhost:8888/test"
+
   
   

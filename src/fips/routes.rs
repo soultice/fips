@@ -118,11 +118,13 @@ pub async fn routes(
 
             let inter = Intermediary::async_try_from(resp).await?;
             holder.intermediary = inter;
-            let resp = Response::async_try_from(holder).await?;
+            let mut resp = Response::async_try_from(holder).await?;
+            add_cors_headers(resp.headers_mut());
             Ok(resp)
         } else {
             // rule isnt forwarding
-            let resp = Response::async_try_from(holder).await?;
+            let mut resp = Response::async_try_from(holder).await?;
+            add_cors_headers(resp.headers_mut());
             Ok(resp)
         };
 

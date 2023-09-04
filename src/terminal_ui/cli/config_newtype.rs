@@ -22,22 +22,19 @@ impl<'a> AsyncFrom<ConfigurationNewtype<'_>> for List<'a> {
             .rules
             .iter()
             .enumerate()
-            .map(|(idx, c)| {
+            .map(|(idx, r)| {
                 let mut lines: Vec<Spans> = vec![];
-                if let crate::configuration::nconfiguration::RuleSet::Rule(r) =
-                    c
-                {
-                    lines.extend(vec![Spans::from(format!(
-                        "name: {} --- path: {}",
-                        r.name, r.path
-                    ))]);
-                }
+                lines.extend(vec![Spans::from(format!(
+                    "name: {} --- path: {}",
+                    r.into_inner().name, r.into_inner().path
+                ))]);
                 // can be used to set background color of a rule
                 let bg = match true {
                     true => Color::Reset,
                     false => Color::Reset,
                 };
-                let fg = match configuration.active_rule_indices.contains(&idx) {
+                let fg = match configuration.active_rule_indices.contains(&idx)
+                {
                     true => Color::Blue,
                     false => Color::DarkGray,
                 };

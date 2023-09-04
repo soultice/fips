@@ -6,7 +6,9 @@ use crossterm::{
         LeaveAlternateScreen,
     },
 };
-use gradient_tui_fork::{backend::CrosstermBackend, Terminal, text::Spans, widgets::List};
+use gradient_tui_fork::{
+    backend::CrosstermBackend, text::Spans, widgets::List, Terminal,
+};
 use std::{
     io::stdout,
     sync::mpsc,
@@ -22,7 +24,10 @@ enum Event<I> {
 use crate::{
     configuration::nconfiguration::NConfiguration,
     terminal_ui::{
-        cli::{ui, App, config_newtype::{ConfigurationNewtype, AsyncFrom}},
+        cli::{
+            config_newtype::{AsyncFrom, ConfigurationNewtype},
+            ui, App,
+        },
         debug::{LoggableNT, PrintInfo},
         state::State,
         util,
@@ -33,6 +38,7 @@ use crate::{
     },
     PaintLogsCallbacks,
 };
+use eyre::{Context, ContextCompat, Result};
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -43,19 +49,19 @@ use tokio::sync::Mutex as AsyncMutex;
 pub enum FrontendError {
     #[error("Failed to start frontend due to io error")]
     GenericFrontend(#[from] std::io::Error),
-    #[error("Failed to start frontend")]
-    BoxedFrontend(#[from] Box<dyn std::error::Error>),
     #[error("Failed to start frontend due to channel error")]
     Input(#[from] std::sync::mpsc::RecvError),
+    #[error("unexpected none option")]
+    NoneOption,
 }
 
 pub async fn spawn_frontend(
     _app: Option<App<'_>>,
     runtime: Runtime,
-) -> Result<(), FrontendError> {
+) -> Result<()> {
     enable_raw_mode()?;
 
-    let mut unwrapped_app = _app.unwrap();
+    let mut unwrapped_app = _app.wrap_err("foo")?;
 
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -66,19 +72,21 @@ pub async fn spawn_frontend(
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(50);
 
-    thread::spawn(move || {
+    thread::spawn(move || -> Result<()> {
         let mut last_tick = Instant::now();
         loop {
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
+
             if event::poll(timeout).unwrap() {
-                if let CEvent::Key(key) = event::read().unwrap() {
-                    tx.send(Event::Input(key)).unwrap();
+                if let CEvent::Key(key) = event::read()? {
+                    tx.send(Event::Input(key))?;
                 }
             }
+
             if last_tick.elapsed() >= tick_rate {
-                tx.send(Event::Tick).unwrap();
+                tx.send(Event::Tick)?;
                 last_tick = Instant::now();
             }
         }
@@ -92,31 +100,35 @@ pub async fn spawn_frontend(
             log::error!("Panic: {}", panic_info);
             captured_state
                 .add_message(PrintInfo::Plain(panic_info.to_string()))
-                .unwrap_or_default();
+                .unwrap();
         })
     });
 
     loop {
-        let all_plugins: Vec<Spans> = unwrapped_app.state
+        let all_plugins: Vec<Spans> = unwrapped_app
+            .state
             .configuration
             .lock()
             .await
             .rules
             .iter()
             .map(|x| x.into_inner())
-            .flat_map(|x| &x.plugins).cloned()
+            .flat_map(|x| &x.plugins)
+            .cloned()
             .flat_map(|x| {
                 let functions = x.functions.lock().unwrap();
                 let copied_keys =
                     functions.keys().cloned().collect::<Vec<String>>();
                 copied_keys
-            }).map(Spans::from)
+            })
+            .map(Spans::from)
             .collect();
 
         let wrapper = ConfigurationNewtype(&unwrapped_app.state.configuration);
         let list = List::async_from(wrapper).await;
 
-        terminal.draw(|f| ui::draw(f, &mut unwrapped_app, all_plugins, list))?;
+        terminal
+            .draw(|f| ui::draw(f, &mut unwrapped_app, all_plugins, list))?;
 
         match rx.recv()? {
             Event::Input(event) => {
@@ -143,41 +155,39 @@ pub async fn spawn_frontend(
 pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
     let inner_state = Arc::clone(&state);
 
-    let log = Box::new(move |message: &Loggable| {
-        match &message.message_type {
-            LoggableType::IncomingRequestAtFfips(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(
-                        LoggableType::IncomingRequestAtFfips(i.clone()),
-                    ))
-                    .unwrap();
-            }
-            LoggableType::OutGoingResponseFromFips(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(
-                        LoggableType::OutGoingResponseFromFips(i.clone()),
-                    ))
-                    .unwrap();
-            }
-            LoggableType::OutgoingRequestToServer(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(
-                        LoggableType::OutgoingRequestToServer(i.clone()),
-                    ))
-                    .unwrap();
-            }
-            LoggableType::IncomingResponseFromServer(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(
-                        LoggableType::IncomingResponseFromServer(i.clone()),
-                    ))
-                    .unwrap();
-            }
-            LoggableType::Plain => {
-                inner_state
-                    .add_message(PrintInfo::Plain(message.message.clone()))
-                    .unwrap();
-            }
+    let log = Box::new(move |message: &Loggable| match &message.message_type {
+        LoggableType::IncomingRequestAtFfips(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::IncomingRequestAtFfips(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::OutGoingResponseFromFips(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::OutGoingResponseFromFips(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::OutgoingRequestToServer(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::OutgoingRequestToServer(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::IncomingResponseFromServer(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::IncomingResponseFromServer(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::Plain => {
+            inner_state
+                .add_message(PrintInfo::Plain(message.message.clone()))
+                .unwrap();
         }
     });
     PaintLogsCallbacks(log)

@@ -1,11 +1,12 @@
 use crokey::key;
 
 use crate:: terminal_ui::{cli::App, debug::PrintInfo};
+use eyre::Result;
 
 pub async fn match_keybinds(
     code: crokey::crossterm::event::KeyEvent,
     app: &mut App<'_>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     log::debug!("Key pressed: {:?}", code);
     match code {
             key!(esc) => {
