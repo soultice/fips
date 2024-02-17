@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use crate::configuration::nconfiguration::NConfiguration;
+use crate::configuration::configuration::Config;
 use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(not(feature = "ui"))]
@@ -20,7 +20,7 @@ use std::any::Any;
 use log::info;
 
 pub fn spawn_backend(
-    configuration: &Arc<AsyncMutex<NConfiguration>>,
+    configuration: &Arc<AsyncMutex<Config>>,
     addr: &SocketAddr,
     logger: &Arc<PaintLogsCallbacks>,
 ) -> JoinHandle<hyper::Result<()>> {

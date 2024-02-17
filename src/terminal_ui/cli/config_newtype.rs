@@ -6,9 +6,9 @@ use gradient_tui_fork::{
 
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::configuration::nconfiguration::NConfiguration;
+use crate::configuration::configuration::Config;
 
-pub struct ConfigurationNewtype<'a>(pub &'a AsyncMutex<NConfiguration>);
+pub struct ConfigurationNewtype<'a>(pub &'a AsyncMutex<Config>);
 pub trait AsyncFrom<T> {
     type Output;
     async fn async_from(t: T) -> Self::Output;

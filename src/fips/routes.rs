@@ -1,7 +1,8 @@
 use crate::{
-    configuration::nconfiguration::{
-        AsyncTryFrom, Intermediary, NConfiguration, RuleAndIntermediaryHolder,
-        RuleSet, ConfigurationError,
+    configuration::{
+        configuration::Config, holder::RuleAndIntermediaryHolder,
+        intermediary::{AsyncTryFrom, Intermediary}, rule::error::ConfigurationError,
+        ruleset::RuleSet,
     },
     utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo},
     PaintLogsCallbacks,
@@ -14,8 +15,8 @@ use hyper::{
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
-use thiserror::Error;
 use eyre::Result;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RoutingError {
@@ -24,13 +25,13 @@ pub enum RoutingError {
     #[error("http error")]
     Http(#[from] http::Error),
     #[error("Configuration Error")]
-    Configuration(#[from] ConfigurationError)
+    Configuration(#[from] ConfigurationError),
 }
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
 pub async fn routes(
     req: Request<Body>,
-    configuration: Arc<AsyncMutex<NConfiguration>>,
+    configuration: Arc<AsyncMutex<Config>>,
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Body>> {
     let requestinfo = RequestInfo::from(&req);
@@ -87,7 +88,12 @@ pub async fn routes(
 
         let info = Loggable {
             message_type: LoggableType::Plain,
-            message: format!("Applying Rule {} {} {} ", holder.rule.name, holder.intermediary.method.clone().unwrap(), holder.intermediary.uri.clone().unwrap()),
+            message: format!(
+                "Applying Rule {} {} {} ",
+                holder.rule.name,
+                holder.intermediary.method.clone().unwrap(),
+                holder.intermediary.uri.clone().unwrap()
+            ),
         };
         (logging.0)(&info);
 

@@ -2,13 +2,13 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 
 use crate::{
-    configuration::{nconfiguration::NConfiguration},
+    configuration::configuration::Config,
     terminal_ui::debug::{LoggableNT, PrintInfo},
 };
 
 pub struct State {
     pub messages: Mutex<Vec<PrintInfo>>,
-    pub configuration: Arc<AsyncMutex<NConfiguration>>,
+    pub configuration: Arc<AsyncMutex<Config>>,
     pub traffic_info: Mutex<Vec<LoggableNT>>,
 }
 
@@ -18,7 +18,10 @@ pub enum MainError {
 }
 
 impl State {
-    pub fn add_traffic_info(&self, traffic_info: LoggableNT) -> Result<(), MainError> {
+    pub fn add_traffic_info(
+        &self,
+        traffic_info: LoggableNT,
+    ) -> Result<(), MainError> {
         if let Ok(mut traffic) = self.traffic_info.lock() {
             traffic.insert(0, traffic_info);
             if traffic.len() > 20 {

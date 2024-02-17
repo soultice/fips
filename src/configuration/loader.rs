@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::fs;
 use thiserror::Error;
 
-use super::nconfiguration::RuleSet;
+use super::ruleset::RuleSet;
 
 #[derive(Error, Debug)]
 pub enum DeserializationError {

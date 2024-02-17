@@ -6,7 +6,7 @@ use std::alloc::System;
 static ALLOCATOR: System = System;
 
 use std::sync::Arc;
-use configuration::nconfiguration::NConfiguration;
+use configuration::configuration::Config;
 use tokio::runtime::Runtime;
 use clap::Parser;
 use std::fs::File;
@@ -18,7 +18,7 @@ mod utility;
 mod plugin_registry;
 mod terminal_ui;
 
-use crate::configuration::nconfiguration::RuleSet;
+use crate::configuration::ruleset::RuleSet;
 use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
 
@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     //TODO: get rid of duplication caused by introduction of async mutex
-    let async_configuration = Arc::new(AsyncMutex::new(NConfiguration::load(&cli_options.nconfig).unwrap_or_default()));
+    let async_configuration = Arc::new(AsyncMutex::new(Config::load(&cli_options.nconfig).unwrap_or_default()));
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]

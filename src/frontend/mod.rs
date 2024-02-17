@@ -22,7 +22,7 @@ enum Event<I> {
 }
 
 use crate::{
-    configuration::nconfiguration::NConfiguration,
+    configuration::configuration::Config,
     terminal_ui::{
         cli::{
             config_newtype::{AsyncFrom, ConfigurationNewtype},
@@ -194,7 +194,7 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
 }
 
 pub async fn setup(
-    configuration: Arc<AsyncMutex<NConfiguration>>,
+    configuration: Arc<AsyncMutex<Config>>,
     options: CliOptions,
 ) -> (
     Option<Arc<State>>,
