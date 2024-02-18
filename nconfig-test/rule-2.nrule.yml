@@ -1,0 +1,18 @@
+- Rule:
+    name: "Mock"
+    when:
+      matchesUris:
+        - uri: ^/mock$
+    then: 
+      functionAs: "Mock"
+      body: "Hello World"
+      status: "200"
+      
+- Rule:
+    name: "Static"
+    when:
+      matchesUris:
+        - uri: ^/.*
+    then:
+      functionAs: "Static"
+      baseDir: "/home/fpfings"

@@ -1,6 +1,6 @@
 [package]
 name = "fips"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Florian Pfingstag <soultice@gmail.com>"]
 edition = "2021"
 description = "A powerful mock server supported by a plugin system"
@@ -9,30 +9,25 @@ homepage = "https://github.com/soultice/fips"
 documentation = "https://github.com/soultice/fips"
 repository = "https://github.com/soultice/fips"
 
-[workspace]
-members = [
-	"packages/terminal_ui",
-	"packages/configuration",
-	"packages/plugin_registry",
-	"packages/utility",
-]
-
 [features]
-logging = ['fips_plugin_registry/logging']
+logging = []
 ui = []
 default = ['ui']
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
-hyper = { version = "0.14", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }
 hyper-staticfile = { version = "0.9.2" }
 clap = { version = "3.0.0-rc.7", features = ["derive"] }
+regex = "1.4.2"
+rand = "0.7"
+libloading = "0.6.6"
 bytes = "1.0.0"
 serde_yaml = "0.8.14"
 serde = "1.0.118"
 serde_json = "1.0.60"
 json-patch = "0.3.0"
-crossterm = "0.25"
+crossterm = "0.24"
 log = "0.4.17"
 futures = "0.3.19"
 json_dotpath = "1.0.3"
@@ -41,22 +36,11 @@ lazy_static = "1.4.0"
 http = "0.2.6"
 thiserror = "1.0.38"
 schemars = "0.8.11"
+crokey = "0.5.1"
+eyre = "0.6.8"
 
-[dependencies.fips_plugin_registry]
-path = "./packages/plugin_registry"
-version = "0.1.0"
-
-[dependencies.fips_configuration]
-path = "./packages/configuration"
-version = "0.1.0"
-
-[dependencies.fips_utility]
-path = "./packages/utility"
-version = "0.1.0"
-
-[dependencies.fips_terminal_ui]
-path = "./packages/terminal_ui"
-version = "0.1.0"
+[build-dependencies]
+rustc_version = "0.4.0"
 
 [dependencies.gradient_tui_fork]
 git = "https://github.com/soultice/tui-rs.git"
@@ -73,3 +57,9 @@ features = [
 	'delete_roller',
 	'size_trigger'
 ]
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = true
+

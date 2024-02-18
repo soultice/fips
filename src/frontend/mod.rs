@@ -1,53 +1,67 @@
-use fips_configuration::configuration::Configuration;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
+        LeaveAlternateScreen,
+    },
 };
-use fips_plugin_registry::ExternalFunctions;
+use gradient_tui_fork::{
+    backend::CrosstermBackend, text::Spans, widgets::List, Terminal,
+};
 use std::{
     io::stdout,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
-use fips_terminal_ui::{
-    cli::{state::State, ui, App},
-    debug::{LoggableNT, PrintInfo},
-    util,
-};
-use gradient_tui_fork::{backend::CrosstermBackend, Terminal};
 
 enum Event<I> {
     Input(I),
     Tick,
 }
 
-use crate::PaintLogsCallbacks;
-use log::info;
+use crate::{
+    configuration::configuration::Config,
+    terminal_ui::{
+        cli::{
+            config_newtype::{AsyncFrom, ConfigurationNewtype},
+            ui, App,
+        },
+        debug::{LoggableNT, PrintInfo},
+        state::State,
+        util,
+    },
+    utility::{
+        log::{Loggable, LoggableType},
+        options::CliOptions,
+    },
+    PaintLogsCallbacks,
+};
+use eyre::{Context, ContextCompat, Result};
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use tokio::runtime::Runtime;
-use fips_utility::{
-    log::{Loggable, LoggableType},
-    options::CliOptions,
-};
+use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Error, Debug)]
 pub enum FrontendError {
     #[error("Failed to start frontend due to io error")]
     GenericFrontend(#[from] std::io::Error),
-    #[error("Failed to start frontend")]
-    BoxedFrontend(#[from] Box<dyn std::error::Error>),
     #[error("Failed to start frontend due to channel error")]
     Input(#[from] std::sync::mpsc::RecvError),
+    #[error("unexpected none option")]
+    NoneOption,
 }
 
-pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), FrontendError> {
+pub async fn spawn_frontend(
+    _app: Option<App<'_>>,
+    runtime: Runtime,
+) -> Result<()> {
     enable_raw_mode()?;
 
-    let mut unwrapped_app = _app.unwrap();
+    let mut unwrapped_app = _app.wrap_err("foo")?;
 
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -58,19 +72,21 @@ pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), Fronten
     let (tx, rx) = mpsc::channel();
     let tick_rate = Duration::from_millis(50);
 
-    thread::spawn(move || {
+    thread::spawn(move || -> Result<()> {
         let mut last_tick = Instant::now();
         loop {
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| Duration::from_secs(0));
+
             if event::poll(timeout).unwrap() {
-                if let CEvent::Key(key) = event::read().unwrap() {
-                    tx.send(Event::Input(key)).unwrap();
+                if let CEvent::Key(key) = event::read()? {
+                    tx.send(Event::Input(key))?;
                 }
             }
+
             if last_tick.elapsed() >= tick_rate {
-                tx.send(Event::Tick).unwrap();
+                tx.send(Event::Tick)?;
                 last_tick = Instant::now();
             }
         }
@@ -81,17 +97,43 @@ pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), Fronten
     panic::set_hook({
         let captured_state = unwrapped_app.state.clone();
         Box::new(move |panic_info| {
+            log::error!("Panic: {}", panic_info);
             captured_state
-                .add_message(PrintInfo::PLAIN(panic_info.to_string()))
-                .unwrap_or_default();
+                .add_message(PrintInfo::Plain(panic_info.to_string()))
+                .unwrap();
         })
     });
 
     loop {
-        terminal.draw(|f| ui::draw(f, &mut unwrapped_app))?;
+        let all_plugins: Vec<Spans> = unwrapped_app
+            .state
+            .configuration
+            .lock()
+            .await
+            .rules
+            .iter()
+            .map(|x| x.into_inner())
+            .flat_map(|x| &x.plugins)
+            .cloned()
+            .flat_map(|x| {
+                let functions = x.functions.lock().unwrap();
+                let copied_keys =
+                    functions.keys().cloned().collect::<Vec<String>>();
+                copied_keys
+            })
+            .map(Spans::from)
+            .collect();
+
+        let wrapper = ConfigurationNewtype(unwrapped_app.state.configuration.clone());
+        let list = List::async_from(wrapper).await;
+
+        terminal
+            .draw(|f| ui::draw(f, &mut unwrapped_app, all_plugins, list))?;
 
         match rx.recv()? {
-            Event::Input(event) => util::match_keybinds(event.code, &mut unwrapped_app)?,
+            Event::Input(event) => {
+                util::match_keybinds(event, &mut unwrapped_app).await?
+            }
             Event::Tick => unwrapped_app.on_tick()?,
         };
 
@@ -113,46 +155,46 @@ pub fn spawn_frontend(_app: Option<App>, runtime: Runtime) -> Result<(), Fronten
 pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
     let inner_state = Arc::clone(&state);
 
-    let log = Box::new(move |message: &Loggable| {
-        match &message.message_type {
-            LoggableType::IncomingRequestAtFfips(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::IncomingRequestAtFfips(i.clone())))
-                    .unwrap();
-            }
-            LoggableType::OutGoingResponseFromFips(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::OutGoingResponseFromFips(
-                        i.clone(),
-                    )))
-                    .unwrap();
-            }
-            LoggableType::OutgoingRequestToServer(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::OutgoingRequestToServer(i.clone())))
-                    .unwrap();
-            }
-            LoggableType::IncomingResponseFromServer(i) => {
-                inner_state
-                    .add_traffic_info(LoggableNT(LoggableType::IncomingResponseFromServer(
-                        i.clone(),
-                    )))
-                    .unwrap();
-            }
-            LoggableType::Plain => {
-                inner_state
-                    .add_message(PrintInfo::PLAIN(message.message.clone()))
-                    .unwrap();
-            }
+    let log = Box::new(move |message: &Loggable| match &message.message_type {
+        LoggableType::IncomingRequestAtFfips(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::IncomingRequestAtFfips(i.clone()),
+                ))
+                .unwrap();
         }
-        info!("{:?}", message.message)
+        LoggableType::OutGoingResponseFromFips(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::OutGoingResponseFromFips(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::OutgoingRequestToServer(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::OutgoingRequestToServer(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::IncomingResponseFromServer(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::IncomingResponseFromServer(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::Plain => {
+            inner_state
+                .add_message(PrintInfo::Plain(message.message.clone()))
+                .unwrap();
+        }
     });
     PaintLogsCallbacks(log)
 }
 
-pub fn setup(
-    plugins: Arc<Mutex<ExternalFunctions>>,
-    configuration: Arc<Mutex<Configuration>>,
+pub async fn setup(
+    configuration: Arc<AsyncMutex<Config>>,
     options: CliOptions,
 ) -> (
     Option<Arc<State>>,
@@ -161,12 +203,11 @@ pub fn setup(
 ) {
     let state = Arc::new(State {
         messages: Mutex::new(Vec::new()),
-        plugins,
         configuration,
         traffic_info: Mutex::new(vec![]),
     });
 
-    let app = App::new(true, state.clone(), options );
+    let app = App::new(true, state.clone(), options);
 
     let logging = Arc::new(define_log_callbacks(app.state.clone()));
     (Some(state), Some(app), logging)

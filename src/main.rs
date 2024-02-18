@@ -3,19 +3,24 @@ use std::alloc::System;
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use fips_plugin_registry::ExternalFunctions;
-use std::sync::{Arc, Mutex};
-use tokio::runtime::Runtime;
 use clap::Parser;
+use configuration::configuration::Config;
 use std::fs::File;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
-use fips_configuration::rule_collection::RuleCollection;
-use fips_configuration::configuration::Configuration;
-use fips_utility::{log::Loggable, options::CliOptions};
-
-mod client;
-mod fips;
 mod backend;
+mod configuration;
+mod fips;
+mod plugin_registry;
+mod terminal_ui;
+mod utility;
+
+use crate::configuration::ruleset::RuleSet;
+use crate::utility::log::Loggable;
+use crate::utility::options::CliOptions;
+
+use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(feature = "logging")]
 mod logging;
@@ -43,25 +48,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_options = CliOptions::parse();
 
     if cli_options.write_schema {
-        let schema = schemars::schema_for!(Vec<RuleCollection>);
+        let schema = schemars::schema_for!(Vec<RuleSet>);
         serde_json::to_writer(&File::create("fips-schema.json")?, &schema)?;
         //exit early
         return Ok(());
     };
 
-    let plugins = Arc::new(Mutex::new(ExternalFunctions::new(&cli_options.plugins)));
-    let configuration = Arc::new(Mutex::new(
-        Configuration::new(&cli_options.config).unwrap_or(Configuration::default()),
+    //TODO: get rid of duplication caused by introduction of async mutex
+    let async_configuration = Arc::new(AsyncMutex::new(
+        Config::load(&cli_options.config).unwrap_or_default(),
     ));
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
-        let (state, app, logging) =
-            { frontend::setup(plugins.clone(), configuration.clone(), cli_options.clone()) };
-        #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
-            backend::setup()
+            frontend::setup(
+                Arc::clone(&async_configuration),
+                cli_options.clone(),
+            )
+            .await
         };
+        #[cfg(not(feature = "ui"))]
+        let (state, app, logging) = { backend::setup() };
         (state, app, logging)
     };
 
@@ -69,11 +77,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
 
-    let _rt_handle = backend::spawn_backend(&configuration, &plugins, &addr, &logging);
+    let _rt_handle =
+        backend::spawn_backend(&async_configuration, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {
-        frontend::spawn_frontend(_app, runtime)?;
+        frontend::spawn_frontend(_app, runtime).await?;
     }
 
     #[cfg(not(feature = "ui"))]

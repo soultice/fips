@@ -1,0 +1,20 @@
+{
+  "yaml.schemas": {
+    "file:///home/fpfings/tss/01_playgrounds/fips/fips-schema.json": [
+      "/**/*.rule.yaml",
+      "file:///home/fpfings/tss/01_playgrounds/fips/nconfig-test/rule-1.nrule.yml"
+    ],
+    "file:///home/fpfings/tss/01_playgrounds/fips/new-fips-schema.json": [
+      "/**/*.nrule.yaml"
+    ]
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/.jj": true,
+    "~": true,
+  },
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml"
+  ],
+  "rust-analyzer.showUnlinkedFileNotification": false
+}

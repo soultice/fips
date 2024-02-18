@@ -4,16 +4,14 @@ use hyper::{
     Body, Request, Server,
 };
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 use super::fips;
 use super::PaintLogsCallbacks;
-use fips_configuration::configuration::Configuration;
-use fips_plugin_registry::ExternalFunctions;
+use crate::configuration::configuration::Config;
+use tokio::sync::Mutex as AsyncMutex;
 
-#[cfg(not(feature = "ui"))]
-use utility::log::Loggable;
 #[cfg(not(feature = "ui"))]
 use std::marker::PhantomData;
 #[cfg(not(feature = "ui"))]
@@ -22,22 +20,18 @@ use std::any::Any;
 use log::info;
 
 pub fn spawn_backend(
-    configuration: &Arc<Mutex<Configuration>>,
-    plugins: &Arc<Mutex<ExternalFunctions>>,
+    configuration: &Arc<AsyncMutex<Config>>,
     addr: &SocketAddr,
     logger: &Arc<PaintLogsCallbacks>,
 ) -> JoinHandle<hyper::Result<()>> {
-    let capture_plugins = plugins.clone();
     let capture_configuration = configuration.clone();
     let capture_logger = logger.clone();
 
     let make_svc = make_service_fn(move |_| {
-        let inner_plugins = capture_plugins.clone();
         let inner_configuration = capture_configuration.clone();
         let inner_logger = capture_logger.clone();
 
         let responder = Box::new(move |req: Request<Body>| {
-            let innermost_plugins = inner_plugins.clone();
             let innermost_configuration = inner_configuration.clone();
             let innermost_logger = inner_logger.clone();
 
@@ -45,7 +39,6 @@ pub fn spawn_backend(
                 fips::routes(
                     req,
                     innermost_configuration,
-                    innermost_plugins,
                     &innermost_logger,
                 )
                 .await
@@ -61,6 +54,8 @@ pub fn spawn_backend(
 
 #[cfg(not(feature = "ui"))]
 fn define_log_callbacks() -> PaintLogsCallbacks {
+    use crate::utility::log::Loggable;
+
     let log = Box::new(|message: &Loggable| info!("{:?}", message.message));
     PaintLogsCallbacks(log)
 }

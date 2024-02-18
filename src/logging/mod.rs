@@ -20,7 +20,7 @@ pub fn init() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Config::builder()
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .build(Root::builder().appender("logfile").build(LevelFilter::Info))?;
+        .build(Root::builder().appender("logfile").build(LevelFilter::Debug))?;
 
     log4rs::init_config(config)?;
 
