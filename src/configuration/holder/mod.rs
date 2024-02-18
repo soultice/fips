@@ -12,12 +12,12 @@ use super::intermediary::{AsyncTryFrom, Intermediary};
 use eyre::{Context, ContextCompat, Result};
 
 
-pub struct RuleAndIntermediaryHolder<'a> {
-    pub rule: &'a Rule,
+pub struct RuleAndIntermediaryHolder {
+    pub rule: Rule,
     pub intermediary: Intermediary,
 }
 
-impl RuleAndIntermediaryHolder<'_> {
+impl RuleAndIntermediaryHolder {
     pub fn apply_plugins(
         &self,
         next: &mut serde_json::Value,
@@ -94,7 +94,7 @@ impl RuleAndIntermediaryHolder<'_> {
 }
 
 //convert from holder to hyper request
-impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
+impl TryFrom<&RuleAndIntermediaryHolder> for Request<Body> {
     type Error = ConfigurationError;
 
     fn try_from(
@@ -141,10 +141,10 @@ impl TryFrom<&RuleAndIntermediaryHolder<'_>> for Request<Body> {
 }
 
 // convert to response
-impl AsyncTryFrom<RuleAndIntermediaryHolder<'_>> for Response<Body> {
+impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Body> {
     type Output = Response<Body>;
     async fn async_try_from(
-        holder: RuleAndIntermediaryHolder<'_>,
+        holder: RuleAndIntermediaryHolder,
     ) -> Result<Self> {
         let preemtive_body = &mut holder.intermediary.body.clone();
         let preemtive_header_map = &mut holder.intermediary.headers.clone();

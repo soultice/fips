@@ -25,7 +25,7 @@ pub async fn match_keybinds(
                     .configuration
                     .lock()
                     .await
-                    .reload(&app.opts.nconfig)?;
+                    .reload(&app.opts.config)?;
                 app.state
                     .add_message(PrintInfo::Plain(String::from(
                         "Config files reloaded",

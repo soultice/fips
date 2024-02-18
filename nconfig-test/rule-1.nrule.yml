@@ -3,6 +3,7 @@
     when:
       matchesUris:
         - uri: ^/mock$
+        - uri: ^/mock2$
     then:
       functionAs: "Mock"
       body: 
@@ -13,10 +14,10 @@
         Content-Type: "application/json"
         X-Test: "test"
 
-    with:
-      plugins: &plugins
-        - name: "{{TestPlugin}}"
-          path: './plugins/libtest_plugin.so'
+    # with:
+    #   plugins: &plugins
+    #     - name: "{{TestPlugin}}"
+    #       path: './plugins/libtest_plugin.so'
 
 - Rule:
     name: "Proxy"
@@ -50,15 +51,15 @@
           - at: "plugin-result"
             with: "{{RandomProductCode}}"
 
-    with:
-      # sleep: 10000
-      plugins:
-        - name: "{{RandomProductCode}}"
-          path: './plugins/librandom_product_code.so'
-          args:
-            - "de"
-            - "DE"
-            - 1771
+    # with:
+    #   # sleep: 10000
+    #   plugins:
+    #     - name: "{{RandomProductCode}}"
+    #       path: './plugins/librandom_product_code.so'
+    #       args:
+    #         - "de"
+    #         - "DE"
+    #         - "1771"
    
 
 

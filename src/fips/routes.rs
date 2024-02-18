@@ -84,7 +84,7 @@ pub async fn routes(
 
         let rule = config_clone.rules[idx].into_inner();
         drop(config_guard);
-        let mut holder = RuleAndIntermediaryHolder { rule, intermediary };
+        let mut holder = RuleAndIntermediaryHolder { rule: rule.clone(), intermediary };
 
         let info = Loggable {
             message_type: LoggableType::Plain,

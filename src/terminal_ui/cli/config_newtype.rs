@@ -1,3 +1,7 @@
+
+
+use std::sync::Arc;
+
 use gradient_tui_fork::{
     style::{Color, Modifier, Style},
     text::Spans,
@@ -8,15 +12,15 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use crate::configuration::configuration::Config;
 
-pub struct ConfigurationNewtype<'a>(pub &'a AsyncMutex<Config>);
+pub struct ConfigurationNewtype(pub Arc<AsyncMutex<Config>>);
 pub trait AsyncFrom<T> {
     type Output;
     async fn async_from(t: T) -> Self::Output;
 }
 
-impl<'a> AsyncFrom<ConfigurationNewtype<'_>> for List<'a> {
+impl<'a> AsyncFrom<ConfigurationNewtype> for List<'a> {
     type Output = List<'a>;
-    async fn async_from(wrapper: ConfigurationNewtype<'_>) -> List<'a> {
+    async fn async_from(wrapper: ConfigurationNewtype) -> List<'a> {
         let configuration = wrapper.0.lock().await;
         let items: Vec<ListItem> = configuration
             .rules

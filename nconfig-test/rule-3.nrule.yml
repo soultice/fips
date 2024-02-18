@@ -1,0 +1,32 @@
+- Rule:
+    name: "Mock PROB 1"
+    when:
+      matchesUris:
+        - uri: ^/mockprob$
+
+    then:
+      functionAs: "Mock"
+      body: 
+        foo: bar
+      status: "200" 
+      headers:
+        Content-Type: "application/json"
+        X-Test: "test"
+
+    with:
+      probability: 0.5
+
+- Rule:
+    name: "Mock FALLBACK 1"
+    when:
+      matchesUris:
+        - uri: '*'
+
+    then:
+      functionAs: "Mock"
+      body: 
+        foo: fallback
+      status: "200" 
+      headers:
+        Content-Type: "application/json"
+        X-Test: "test"

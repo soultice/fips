@@ -1,30 +1,26 @@
-#![feature(async_fn_in_trait)]
-
 use std::alloc::System;
 
 #[global_allocator]
 static ALLOCATOR: System = System;
 
-use std::sync::Arc;
-use configuration::configuration::Config;
-use tokio::runtime::Runtime;
 use clap::Parser;
+use configuration::configuration::Config;
 use std::fs::File;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
-mod fips;
 mod backend;
 mod configuration;
-mod utility;
+mod fips;
 mod plugin_registry;
 mod terminal_ui;
+mod utility;
 
 use crate::configuration::ruleset::RuleSet;
 use crate::utility::log::Loggable;
 use crate::utility::options::CliOptions;
 
-
 use tokio::sync::Mutex as AsyncMutex;
-
 
 #[cfg(feature = "logging")]
 mod logging;
@@ -59,16 +55,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     //TODO: get rid of duplication caused by introduction of async mutex
-    let async_configuration = Arc::new(AsyncMutex::new(Config::load(&cli_options.nconfig).unwrap_or_default()));
+    let async_configuration = Arc::new(AsyncMutex::new(
+        Config::load(&cli_options.config).unwrap_or_default(),
+    ));
 
     let (_state, _app, logging) = {
         #[cfg(feature = "ui")]
-        let (state, app, logging) =
-            { frontend::setup(Arc::clone(&async_configuration), cli_options.clone()).await };
-        #[cfg(not(feature = "ui"))]
         let (state, app, logging) = {
-            backend::setup()
+            frontend::setup(
+                Arc::clone(&async_configuration),
+                cli_options.clone(),
+            )
+            .await
         };
+        #[cfg(not(feature = "ui"))]
+        let (state, app, logging) = { backend::setup() };
         (state, app, logging)
     };
 
@@ -76,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
 
-    let _rt_handle = backend::spawn_backend(&async_configuration, &addr, &logging);
+    let _rt_handle =
+        backend::spawn_backend(&async_configuration, &addr, &logging);
 
     #[cfg(feature = "ui")]
     {

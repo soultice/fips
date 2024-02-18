@@ -1,5 +1,5 @@
 use bytes::Buf;
-use eyre::{Context, ContextCompat, Result, eyre};
+use eyre::{eyre, Context, ContextCompat, Result};
 use http::{
     header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
 };
@@ -16,8 +16,8 @@ use crate::plugin_registry::{ExternalFunctions, InvocationError};
 
 use super::loader::{DeserializationError, YamlFileLoader};
 
+use super::rule::{then::Then, when::When, Rule};
 use super::ruleset::RuleSet;
-use super::rule::{when::When, then::Then, Rule};
 
 lazy_static! {
     static ref HTTP_METHODS: Vec<String> = vec![
@@ -106,8 +106,6 @@ pub struct Plugin {
     pub args: Option<Value>,
 }
 
-
-
 #[derive(Deserialize, Clone, Debug, JsonSchema)]
 pub struct Config {
     pub active_rule_indices: Vec<usize>,
@@ -148,18 +146,17 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn load(
-        paths: &[PathBuf],
-    ) -> Result<Config, DeserializationError> {
+    pub fn load(paths: &[PathBuf]) -> Result<Config, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
         let mut rules = loader.load_from_directories(paths)?;
 
         if rules.is_empty() {
-            return Ok(Config::default())
+            return Ok(Config::default());
         }
 
         //load plugins
+        //TODO: error handling here, else one faulty plugin block destroys the whole config
         for rule in &mut rules {
             match rule {
                 RuleSet::Rule(rule) => {
@@ -177,7 +174,6 @@ impl Config {
                 }
             }
         }
-
         Ok(Config {
             //all rules are active initially
             active_rule_indices: (0..rules.len()).collect(),
@@ -225,4 +221,3 @@ impl Config {
         self.active_rule_indices.push(self.fe_selected_rule);
     }
 }
-

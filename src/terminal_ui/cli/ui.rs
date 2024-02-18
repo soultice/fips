@@ -19,7 +19,8 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
     let app_title = format!(
         "Fips──live on {} 😌, using config path: {}",
         app.opts.port,
-        app.opts.config.clone().to_str().unwrap()
+        "not yet implemented" //
+        //app.opts.config.clone().to_str().unwrap()
     );
 
     let gradient = colorgrad::CustomGradient::new()
@@ -141,7 +142,7 @@ fn draw_rules_tab<B>(
     )).border_gradients(_app.gradients.clone());
     let constraints = vec![Constraint::Min(5)];
     let chunks = Layout::default()
-        .constraints(constraints.as_ref())
+        .constraints::<Vec<Constraint>>(constraints.clone())
         .split(area);
 
 
@@ -167,7 +168,7 @@ fn draw_info_tab<B>(
         .collect();
 
     let chunks = Layout::default()
-        .constraints(constraints.as_ref())
+        .constraints::<Vec<Constraint>>(constraints.clone())
         .split(area);
 
     for (i, traffic_info) in response_info.iter().enumerate() {

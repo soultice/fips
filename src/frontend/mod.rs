@@ -124,7 +124,7 @@ pub async fn spawn_frontend(
             .map(Spans::from)
             .collect();
 
-        let wrapper = ConfigurationNewtype(&unwrapped_app.state.configuration);
+        let wrapper = ConfigurationNewtype(unwrapped_app.state.configuration.clone());
         let list = List::async_from(wrapper).await;
 
         terminal
