@@ -38,7 +38,8 @@ use crate::{
     },
     PaintLogsCallbacks,
 };
-use eyre::{Context, ContextCompat, Result};
+use eyre::Result;
+use crate::configuration::rule::Rule;
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -61,7 +62,7 @@ pub async fn spawn_frontend(
 ) -> Result<()> {
     enable_raw_mode()?;
 
-    let mut unwrapped_app = _app.wrap_err("foo")?;
+    let mut unwrapped_app = _app.ok_or_else(|| eyre::eyre!("No app available"))?;
 
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -105,36 +106,25 @@ pub async fn spawn_frontend(
     });
 
     loop {
-        let all_plugins: Vec<Spans> = unwrapped_app
-            .state
-            .configuration
-            .lock()
-            .await
-            .rules
-            .iter()
-            .map(|x| x.into_inner())
-            .flat_map(|x| &x.plugins)
-            .cloned()
-            .flat_map(|x| {
-                let functions = x.functions.lock().unwrap();
-                let copied_keys =
-                    functions.keys().cloned().collect::<Vec<String>>();
-                copied_keys
-            })
+        let config = unwrapped_app.state.configuration.clone();
+        let config_guard = config.lock().await;
+        let plugin_names = collect_plugin_info(&config_guard.rules).await;
+        let plugin_spans: Vec<Spans> = plugin_names.into_iter()
             .map(Spans::from)
             .collect();
 
-        let wrapper = ConfigurationNewtype(unwrapped_app.state.configuration.clone());
+        let wrapper = ConfigurationNewtype(config.clone());
         let list = List::async_from(wrapper).await;
-
+        
+        let app_ref = &mut unwrapped_app;
         terminal
-            .draw(|f| ui::draw(f, &mut unwrapped_app, all_plugins, list))?;
+            .draw(|f| ui::draw(f, app_ref, plugin_spans, list))?;
 
         match rx.recv()? {
             Event::Input(event) => {
-                util::match_keybinds(event, &mut unwrapped_app).await?
+                util::match_keybinds(event, app_ref).await?;
             }
-            Event::Tick => unwrapped_app.on_tick()?,
+            Event::Tick => app_ref.on_tick()?,
         };
 
         if unwrapped_app.should_quit {
@@ -152,21 +142,31 @@ pub async fn spawn_frontend(
     Ok(())
 }
 
+async fn collect_plugin_info(rules: &[Rule]) -> Vec<String> {
+    let mut result = Vec::new();
+    for rule in rules {
+        if let Some(with) = &rule.with {
+            result.extend(with.plugins.iter().map(|p| p.name.clone()));
+        }
+    }
+    result
+}
+
 pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
     let inner_state = Arc::clone(&state);
 
     let log = Box::new(move |message: &Loggable| match &message.message_type {
-        LoggableType::IncomingRequestAtFfips(i) => {
+        LoggableType::IncomingRequestAtFips(i) => {
             inner_state
                 .add_traffic_info(LoggableNT(
-                    LoggableType::IncomingRequestAtFfips(i.clone()),
+                    LoggableType::IncomingRequestAtFips(i.clone()),
                 ))
                 .unwrap();
         }
-        LoggableType::OutGoingResponseFromFips(i) => {
+        LoggableType::OutgoingResponseAtFips(i) => {
             inner_state
                 .add_traffic_info(LoggableNT(
-                    LoggableType::OutGoingResponseFromFips(i.clone()),
+                    LoggableType::OutgoingResponseAtFips(i.clone()),
                 ))
                 .unwrap();
         }
@@ -181,6 +181,13 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
             inner_state
                 .add_traffic_info(LoggableNT(
                     LoggableType::IncomingResponseFromServer(i.clone()),
+                ))
+                .unwrap();
+        }
+        LoggableType::IncomingResponseAtFips(i) => {
+            inner_state
+                .add_traffic_info(LoggableNT(
+                    LoggableType::IncomingResponseAtFips(i.clone()),
                 ))
                 .unwrap();
         }

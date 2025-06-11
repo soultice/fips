@@ -1,175 +1,222 @@
 use crate::{
     configuration::{
-        configuration::Config, holder::RuleAndIntermediaryHolder,
-        intermediary::{AsyncTryFrom, Intermediary}, rule::error::ConfigurationError,
-        ruleset::RuleSet,
+        configuration::Config,
+        intermediary::{Intermediary, IntermediaryError, into_response},
     },
     utility::log::{Loggable, LoggableType, RequestInfo, ResponseInfo},
-    PaintLogsCallbacks,
+    plugin_registry::ExternalFunctions,
 };
 
 use hyper::{
     header::{HeaderMap, HeaderValue},
-    Body, Client, Method, Request, Response, StatusCode,
+    Request, Response, StatusCode,
+    http::Method,
+};
+use bytes::Bytes;
+use http_body_util::{BodyExt, Empty, Full};
+use http_body_util::combinators::BoxBody;
+use hyper_util::{
+    client::legacy::{Client, connect::HttpConnector},
+    rt::TokioExecutor,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
-use eyre::Result;
+use eyre::{Result};
 use thiserror::Error;
+use crate::configuration::rule::error::ConfigurationError;
+
+type BoxedBody = BoxBody<Bytes, hyper::Error>;
 
 #[derive(Error, Debug)]
 pub enum RoutingError {
-    #[error("http error")]
-    HttpHyper(#[from] hyper::Error),
-    #[error("http error")]
-    Http(#[from] http::Error),
-    #[error("Configuration Error")]
-    Configuration(#[from] ConfigurationError),
+    #[error("HTTP error: {0}")]
+    Hyper(#[from] hyper::Error),
+    
+    #[error("HTTP build error: {0}")]
+    HttpBuild(#[from] hyper::http::Error),
+    
+    #[error("Client error: {0}")]
+    Client(#[from] hyper_util::client::legacy::Error),
+    
+    #[error("Intermediary error: {0}")]
+    Intermediary(#[from] IntermediaryError),
+    
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    
+    #[error("Rule error: {0}")]
+    RuleError(#[from] eyre::Error),
+    
+    #[error("Other error: {0}")]
+    Other(Box<dyn std::error::Error + Send + Sync>),
 }
 
-// this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
-pub async fn routes(
-    req: Request<Body>,
+// Helper function for empty responses
+fn empty_response(status: StatusCode) -> Response<BoxedBody> {
+    Response::builder()
+        .status(status)
+        .body(Empty::new().map_err(|never| match never {}).boxed())
+        .unwrap_or_else(|_| {
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Empty::new().map_err(|never| match never {}).boxed())
+                .unwrap()
+        })
+}
+
+// Helper function to collect body bytes
+async fn collect_body_bytes(body: hyper::body::Incoming) -> Result<String, RoutingError> {
+    let bytes = http_body_util::BodyExt::collect(body)
+        .await?
+        .to_bytes();
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+// Helper function to create an initial intermediary from request parts
+fn create_intermediary_from_parts(parts: hyper::http::request::Parts) -> Result<Intermediary, RoutingError> {
+    Ok(Intermediary {
+        uri: Some(parts.uri),
+        method: Some(parts.method),
+        status: StatusCode::OK,
+        headers: parts.headers,
+        body: None,
+    })
+}
+
+// Helper function to create a boxed body with hyper::Error
+fn create_boxed_body(data: Option<String>) -> BoxedBody {
+    match data {
+        Some(body) => Full::new(Bytes::from(body)).map_err(|never| match never {}).boxed(),
+        None => Empty::new().map_err(|never| match never {}).boxed(),
+    }
+}
+
+impl From<ConfigurationError> for RoutingError {
+    fn from(err: ConfigurationError) -> Self {
+        RoutingError::RuleError(err.into())
+    }
+}
+
+pub async fn handle_request(
+    req: Request<hyper::body::Incoming>,
     configuration: Arc<AsyncMutex<Config>>,
-    logging: &Arc<PaintLogsCallbacks>,
-) -> Result<Response<Body>> {
+    paint_logs: Arc<AsyncMutex<Vec<Box<dyn Fn(Loggable) + Send + Sync>>>>,
+    external_functions: &ExternalFunctions,
+) -> Result<Response<BoxedBody>, RoutingError> {
     let requestinfo = RequestInfo::from(&req);
+    let request_id = requestinfo.id.clone();
 
     let log_output = Loggable {
-        message_type: LoggableType::IncomingRequestAtFfips(requestinfo),
-        message: "".to_owned(),
+        message_type: LoggableType::IncomingRequestAtFips(requestinfo),
+        message: format!("Incoming Request at FIPS with id: {}", request_id),
     };
-    (logging.0)(&log_output);
 
-    let intermediary = Intermediary::async_try_from(req).await?;
-
-    let c = intermediary.clone();
-    //TODO clean up adding cors, have rule that makes sense here
-    if let (Some(method), Some(uri)) = (&c.method, &c.uri) {
-        if method == Method::OPTIONS {
-            let mut resp = Response::new(Body::empty());
-            add_cors_headers(resp.headers_mut());
-            return Ok(resp);
-        }
-        if method == Method::OPTIONS && uri == "/favicon.ico" {
-            //early return for favicon
-            return Ok(Response::new(Body::default()));
-        }
+    // Log the incoming request
+    for callback in paint_logs.lock().await.iter() {
+        callback(log_output.clone());
     }
-    // find first matching rule
+
+    let (parts, body) = req.into_parts();
+    let body_str = collect_body_bytes(body).await?;
+    
+    let mut intermediary = create_intermediary_from_parts(parts)?;
+    intermediary.body = Some(body_str);
+
+    // Get the configuration and check rules
     let config = configuration.lock().await;
-    let matching_rule_idx =
-        config.rules.iter().enumerate().find_map(|(idx, rule)| {
-            if !config.active_rule_indices.contains(&idx) {
-                None
-            } else {
-                match rule {
-                    RuleSet::Rule(rule) => {
-                        if rule.should_apply(&intermediary).is_ok() {
-                            Some(idx)
-                        } else {
-                            None
-                        }
-                    }
-                }
+    match config.check_rule(&intermediary).await {
+        Ok(mut container) => {
+            // Apply the rules in the container to modify the intermediary
+            container.apply(&mut intermediary, external_functions).await?;
+            
+            // Convert the intermediary to a request
+            let mut request_builder = Request::builder()
+                .method(intermediary.method.unwrap_or(Method::GET))
+                .uri(intermediary.uri.unwrap_or_else(|| "/".parse().unwrap()));
+
+            if let Some(headers) = request_builder.headers_mut() {
+                headers.extend(intermediary.headers);
             }
-        });
-    drop(config);
 
-    if let Some(idx) = matching_rule_idx {
-        //add uri and route from configuration (enrich)
-        let config_guard = configuration.lock().await;
-        let config_clone = config_guard.clone();
+            let request = request_builder
+                .body(create_boxed_body(intermediary.body))?;
 
-        let rule = config_clone.rules[idx].into_inner();
-        drop(config_guard);
-        let mut holder = RuleAndIntermediaryHolder { rule: rule.clone(), intermediary };
-
-        let info = Loggable {
-            message_type: LoggableType::Plain,
-            message: format!(
-                "Applying Rule {} {} {} ",
-                holder.rule.name,
-                holder.intermediary.method.clone().unwrap(),
-                holder.intermediary.uri.clone().unwrap()
-            ),
-        };
-        (logging.0)(&info);
-
-        let request = hyper::Request::try_from(&holder);
-
-        // Rule is forwarding (Proxy/FIPS)
-        let resp = if let Ok(request) = request {
-            let requestinfo = RequestInfo::from(&request);
-            let log_output = Loggable {
-                message_type: LoggableType::OutgoingRequestToServer(
-                    requestinfo,
-                ),
-                message: "".to_owned(),
-            };
-            (logging.0)(&log_output);
-
-            let client = Arc::new(Client::new());
+            // Make the request using a properly typed client
+            let client: Client<HttpConnector, BoxedBody> = Client::builder(TokioExecutor::new())
+                .build(HttpConnector::new());
+            
             let resp = client.request(request).await?;
-
-            let responseinfo = ResponseInfo::from(&resp);
-            let log_output = Loggable {
-                message_type: LoggableType::OutGoingResponseFromFips(
-                    responseinfo,
-                ),
-                message: "".to_owned(),
+            let mut intermediary = Intermediary {
+                status: resp.status(),
+                headers: resp.headers().clone(),
+                body: None,
+                uri: None,
+                method: None,
             };
-            (logging.0)(&log_output);
 
-            let inter = Intermediary::async_try_from(resp).await?;
-            holder.intermediary = inter;
-            let mut resp = Response::async_try_from(holder).await?;
-            add_cors_headers(resp.headers_mut());
-            Ok(resp)
-        } else {
-            // rule isnt forwarding
-            let mut resp = Response::async_try_from(holder).await?;
-            add_cors_headers(resp.headers_mut());
-            Ok(resp)
-        };
+            // Convert the intermediary to a response
+            let response = into_response(intermediary)?;
 
-        if let Some(with) = &rule.with {
-            if let Some(sleep_time_ms) = with.sleep {
-                tokio::time::sleep(tokio::time::Duration::from_millis(
-                    sleep_time_ms,
-                ))
-                .await;
+            // Create response info for logging
+            let response_info = ResponseInfo::from(&response);
+            
+            let log_output = Loggable {
+                message_type: LoggableType::OutgoingResponseAtFips(response_info),
+                message: "Response sent".to_owned(),
+            };
+
+            // Log the outgoing response
+            for callback in paint_logs.lock().await.iter() {
+                callback(log_output.clone());
             }
-        }
-        resp
-    } else {
-        //TODO create this from intermediary
-        let mut no_matching_rule =
-            Response::new(Body::from("no matching rule found"));
-        *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
 
-        add_cors_headers(no_matching_rule.headers_mut());
-        (logging.0)(&Loggable {
-            message: format!(
-                "No matching rule found for URI: {:?}",
-                &intermediary.clone().uri
-            ),
-            message_type: LoggableType::Plain,
-        });
-        Ok(no_matching_rule)
+            // Convert incoming response to intermediary and apply rules
+            let mut inter = Intermediary::new();
+            inter.status = resp.status();
+            inter.headers = resp.headers().clone();
+
+            // Convert body and apply rules
+            let body_bytes = http_body_util::BodyExt::collect(resp.into_body())
+                .await?
+                .to_bytes();
+            
+            // First try to parse as string
+            inter.body = Some(String::from_utf8_lossy(&body_bytes).into_owned());
+
+            // Apply rules from container if needed
+            container.apply(&mut inter, external_functions).await?;
+
+            // Convert intermediary back to response and add CORS headers
+            let mut resp = Response::builder()
+                .status(inter.status)
+                .body({
+                    if let Some(body) = inter.body {
+                        Full::new(Bytes::from(body))
+                            .map_err(|never| match never {})
+                            .boxed()
+                    } else {
+                        Empty::new()
+                            .map_err(|never| match never {})
+                            .boxed()
+                    }
+                })
+                .map_err(|e| RoutingError::HttpBuild(e))?;
+            
+            // Copy headers from intermediary
+            resp.headers_mut().extend(inter.headers);
+            add_cors_headers(resp.headers_mut());
+
+            Ok(resp)
+        },
+        Err(_) => {
+            Ok(empty_response(StatusCode::NOT_FOUND))
+        }
     }
 }
 
-fn add_cors_headers(headers: &mut HeaderMap) {
-    headers
-        .insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-    headers.insert(
-        "Access-Control-Allow-Headers",
-        HeaderValue::from_static("*"),
-    );
-    headers.insert(
-        "Access-Control-Allow-Methods",
-        HeaderValue::from_static("*"),
-    );
+fn add_cors_headers(headers: &mut HeaderMap<HeaderValue>) {
+    headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    headers.insert("Access-Control-Allow-Methods", HeaderValue::from_static("*"));
+    headers.insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
 }

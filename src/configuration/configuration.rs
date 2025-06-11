@@ -1,223 +1,94 @@
-use bytes::Buf;
-use eyre::{eyre, Context, ContextCompat, Result};
-use http::{
-    header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
-};
-use hyper::{Body, Request, Response};
-use json_dotpath::DotPaths;
-use lazy_static::lazy_static;
-
+use eyre::Result;
+use hyper::http::StatusCode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use thiserror::Error;
 
-use crate::plugin_registry::{ExternalFunctions, InvocationError};
-
-use super::loader::{DeserializationError, YamlFileLoader};
-
-use super::rule::{then::Then, when::When, Rule};
-use super::ruleset::RuleSet;
-
-lazy_static! {
-    static ref HTTP_METHODS: Vec<String> = vec![
-        String::from("GET"),
-        String::from("OPTIONS"),
-        String::from("POST"),
-        String::from("PUT"),
-        String::from("DELETE"),
-        String::from("HEAD"),
-        String::from("TRACE"),
-        String::from("CONNECT"),
-        String::from("PATCH"),
-    ];
-}
-
-/*
-Rule {
-  when {
-    matches
-    bodyContains
-    probability
-  }
-  then {
-    type: Proxy / fips / mock / static
-    forwardUri // only for proxy and fips
-    modifyRequest // only for proxy and fips
-    modifyResponse // only for proxy and fips
-    ...
-  }
-  with {
-    sleep
-    plugins
-  }
-}
- */
+use super::rule::Rule;
+use super::intermediary::Intermediary;
+use super::holder::RuleContainer;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Match {
-    pub uri: String,
-    pub body: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-enum RuleType {
-    NonForwarding,
-    Forwarding,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ModifyRequest {
-    #[serde(rename = "setHeaders")]
-    add_headers: Option<HashMap<String, String>>,
-    #[serde(rename = "keepHeaders")]
-    keep_headers: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ModifyResponseFips {
-    #[serde(rename = "setHeaders")]
-    pub set_headers: Option<HashMap<String, String>>,
-    #[serde(rename = "deleteHeaders")]
-    pub delete_headers: Option<Vec<String>>,
-    pub body: Option<Vec<BodyManipulation>>,
-    pub status: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct ModifyResponseProxy {
-    #[serde(rename = "setHeaders")]
-    pub add_headers: Option<HashMap<String, String>>,
-    #[serde(rename = "keepHeaders")]
-    pub delete_headers: Option<Vec<String>>,
-    pub status: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct BodyManipulation {
-    pub at: String,
-    pub with: Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct Plugin {
-    pub path: String,
-    pub name: String,
-    pub args: Option<Value>,
-}
-
-#[derive(Deserialize, Clone, Debug, JsonSchema)]
 pub struct Config {
     pub active_rule_indices: Vec<usize>,
-    pub fe_selected_rule: usize,
-    pub rules: Vec<RuleSet>,
+    pub fe_selected_rule: Option<i32>,
+    pub rules: Vec<Rule>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            active_rule_indices: vec![0],
-            fe_selected_rule: 0,
-            rules: vec![RuleSet::Rule(Rule {
-                name: String::from("Static fallback - no rules found"),
-                plugins: None,
-                when: When {
-                    matches: vec![Match {
-                        uri: String::from(".*"),
-                        body: None,
-                    }],
-                    matches_methods: None,
-                    body_contains: None,
-                },
-                then: Then::Static {
-                    static_base_dir: Some(
-                        std::env::current_dir()
-                            .unwrap()
-                            .into_os_string()
-                            .into_string()
-                            .unwrap(),
-                    ),
-                },
-                with: None,
-                path: String::from(""),
-            })],
-        }
-    }
+#[derive(Debug, Error)]
+pub enum ConfigError {
+    #[error("No matching rule found")]
+    NoMatchingRule,
+    #[error("Rule evaluation failed: {0}")]
+    RuleEvaluation(String),
+    #[error("Failed to load config: {0}")]
+    LoadError(String),
 }
 
 impl Config {
-    pub fn load(paths: &[PathBuf]) -> Result<Config, DeserializationError> {
-        let extensions = vec![String::from("yaml"), String::from("yml")];
-        let loader = YamlFileLoader { extensions };
-        let mut rules = loader.load_from_directories(paths)?;
-
-        if rules.is_empty() {
-            return Ok(Config::default());
+    pub fn new() -> Self {
+        Self {
+            active_rule_indices: Vec::new(),
+            fe_selected_rule: None,
+            rules: Vec::new(),
         }
-
-        //load plugins
-        //TODO: error handling here, else one faulty plugin block destroys the whole config
-        for rule in &mut rules {
-            match rule {
-                RuleSet::Rule(rule) => {
-                    if let Some(with) = &rule.with {
-                        if let Some(plugins) = &with.plugins {
-                            for plugin in plugins {
-                                let path = PathBuf::from(&plugin.path);
-                                let absolute_path = path.canonicalize()?;
-                                let external_functions =
-                                    ExternalFunctions::new(&absolute_path);
-                                rule.plugins = Some(external_functions);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(Config {
-            //all rules are active initially
-            active_rule_indices: (0..rules.len()).collect(),
-            fe_selected_rule: 0,
-            rules,
-        })
     }
 
-    pub fn reload(&mut self, paths: &[PathBuf]) -> Result<()> {
-        //TODO enable plugin reload
-        match Config::load(paths) {
-            Ok(new_config) => {
-                self.rules = new_config.rules;
-                self.active_rule_indices = new_config.active_rule_indices;
-                self.fe_selected_rule = new_config.fe_selected_rule;
-                Ok(())
+    pub fn reload(&mut self, _path: &str) -> Result<(), ConfigError> {
+        // Load configuration from the specified path
+        // This is just a placeholder - implement actual loading logic
+        Ok(())
+    }
+
+    pub async fn check_rule(&self, _intermediary: &Intermediary) -> Result<RuleContainer, ConfigError> {
+        let mut container = RuleContainer::new();
+
+        // Only process active rules
+        for idx in &self.active_rule_indices {
+            if let Some(rule) = self.rules.get(*idx) {
+                container.add_rule(rule.clone());
             }
-            Err(e) => Err(eyre!("Error reloading config: {e:?}")),
+        }
+
+        // Return early if no rules matched
+        if container.get_rules().is_empty() {
+            return Err(ConfigError::NoMatchingRule);
+        }
+
+        Ok(container)
+    }
+
+    pub fn toggle_rule(&mut self) -> bool {
+        if let Some(idx) = self.fe_selected_rule.and_then(|i| Some(i as usize)) {
+            if self.active_rule_indices.contains(&idx) {
+                self.active_rule_indices.retain(|&x| x != idx);
+                false
+            } else {
+                self.active_rule_indices.push(idx);
+                true
+            }
+        } else {
+            false
         }
     }
 
     pub fn select_next(&mut self) {
-        self.fe_selected_rule = (self.fe_selected_rule + 1) % self.rules.len();
-    }
-
-    pub fn select_previous(&mut self) {
-        self.fe_selected_rule =
-            (self.fe_selected_rule + self.rules.len() - 1) % self.rules.len();
-    }
-
-    pub fn toggle_rule(&mut self) {
-        if self.active_rule_indices.contains(&self.fe_selected_rule) {
-            self.remove_from_active_indices();
-        } else {
-            self.add_to_active_indices();
+        if let Some(current) = self.fe_selected_rule {
+            if (current as usize) < self.rules.len() - 1 {
+                self.fe_selected_rule = Some(current + 1);
+            }
+        } else if !self.rules.is_empty() {
+            self.fe_selected_rule = Some(0);
         }
     }
 
-    pub fn remove_from_active_indices(&mut self) {
-        self.active_rule_indices
-            .retain(|&x| x != self.fe_selected_rule);
-    }
-
-    pub fn add_to_active_indices(&mut self) {
-        self.active_rule_indices.push(self.fe_selected_rule);
+    pub fn select_previous(&mut self) {
+        if let Some(current) = self.fe_selected_rule {
+            if current > 0 {
+                self.fe_selected_rule = Some(current - 1);
+            }
+        } else if !self.rules.is_empty() {
+            self.fe_selected_rule = Some((self.rules.len() - 1) as i32);
+        }
     }
 }

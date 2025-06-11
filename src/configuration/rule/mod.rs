@@ -3,96 +3,61 @@ pub mod then;
 pub mod when;
 pub mod with;
 
+use std::str::FromStr;
 use error::ConfigurationError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use eyre::{ContextCompat, Result};
-use regex::RegexSet;
-use rand::Rng;
-
-use super::rule::then::Then;
-use super::rule::when::When;
-use super::rule::with::With;
+use eyre::Result;
 use super::intermediary::Intermediary;
-
 use crate::plugin_registry::ExternalFunctions;
+use self::then::Then;
+use self::when::When;
+use self::with::With;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct Rule {
     pub name: String,
-    pub when: When,
-    pub then: Then,
-    pub with: Option<With>,
-    #[serde(skip)]
     pub path: String,
-    #[serde(skip)]
-    pub plugins: Option<ExternalFunctions>,
+    pub when: Option<When>,
+    pub with: Option<With>,
+    pub then: Then,
 }
 
 impl Rule {
-    pub fn should_apply(&self, intermediary: &Intermediary) -> Result<()> {
-        let mut rng = rand::thread_rng();
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
 
-        let uri_regex = RegexSet::new(
-            self.when
-                .matches
-                .iter()
-                .map(|m| m.uri.as_str())
-                .collect::<Vec<&str>>(),
-        )?;
+    pub fn get_path(&self) -> &str {
+        &self.path
+    }
 
-        let uri = intermediary
-            .clone()
-            .uri
-            .wrap_err("could not retrieve uri")?;
-
-        let some_uris_match = uri_regex.is_match(uri.path());
-        if !some_uris_match {
-            return Err(ConfigurationError::RuleDoesNotMatch.into());
+    pub async fn apply(&self, intermediary: &mut Intermediary, functions: &ExternalFunctions) -> Result<()> {
+        if self.matches(intermediary).await {
+            self.then.apply(intermediary, functions).await?;
         }
+        Ok(())
+    }
 
-        let some_methods_match =
-            self.when.matches_methods.as_ref().map_or(true, |methods| {
-                methods
-                    .iter()
-                    .any(|m| m == intermediary.clone().method.unwrap().as_str())
-            });
-
-        if !some_methods_match {
-            return Err(ConfigurationError::RuleDoesNotMatch.into());
+    pub fn apply_when(&self, intermediary: &mut Intermediary) -> bool {
+        match &self.when {
+            Some(when) => when.apply(intermediary),
+            None => true,
         }
+    }
 
-        let some_body_contains =
-            self.when
-                .body_contains
-                .as_ref()
-                .map_or(true, |body_contains| {
-                    intermediary.body.as_str().unwrap().contains(body_contains)
-                });
+    pub async fn apply_then(&self, intermediary: &mut Intermediary, functions: &ExternalFunctions) -> Result<()> {
+        self.then.apply(intermediary, functions).await
+    }
 
-        if !some_body_contains {
-            return Err(ConfigurationError::RuleDoesNotMatch.into());
+    pub async fn matches(&self, intermediary: &Intermediary) -> bool {
+        self.should_apply(intermediary).is_ok()
+    }
+
+    pub fn should_apply(&self, intermediary: &Intermediary) -> Result<(), ConfigurationError> {
+        if let Some(ref when) = self.when {
+            when.verify(intermediary)?;
         }
-
-        let probability_matches = self
-            .with
-            .as_ref()
-            .unwrap_or(&With {
-                probability: Some(1.0),
-                plugins: None,
-                sleep: None,
-            })
-            .probability
-            .map(|probability| {
-                let random_number = rng.gen_range(0.0, 0.99);
-                random_number < probability
-            })
-            .unwrap_or(true);
-
-        if !probability_matches {
-            return Err(ConfigurationError::RuleDoesNotMatch.into());
-        }
-
         Ok(())
     }
 }

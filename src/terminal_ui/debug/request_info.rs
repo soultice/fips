@@ -1,45 +1,37 @@
-use hyper::{Body, Request};
-use std::collections::HashMap;
+use hyper::body::Incoming;
 use gradient_tui_fork::text::Text;
-
 use crate::utility::log::RequestInfo;
+
+type FipsBody = Incoming;
 
 pub struct RequestInfoNT(pub RequestInfo);
 
-impl From<&Request<Body>> for RequestInfoNT {
-    fn from(request: &Request<Body>) -> RequestInfoNT {
-        let method = String::from(request.method().clone().as_str());
-        let uri = request.uri().clone().to_string();
-        let version = format!("{:?}", request.version().clone());
-        let mut headers = HashMap::new();
-        for (k, v) in request.headers() {
-            headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
-            );
-        }
+impl From<&hyper::Request<FipsBody>> for RequestInfoNT {
+    fn from(request: &hyper::Request<FipsBody>) -> RequestInfoNT {
         RequestInfoNT(RequestInfo {
-            request_type: String::from("placeholder"),
-            method,
-            uri,
-            version,
-            headers,
+            id: uuid::Uuid::new_v4().to_string(),
+            request_type: String::from("HTTP"),
+            method: request.method().clone(),
+            uri: request.uri().clone(),
+            version: request.version(),
+            headers: request.headers().clone(),
         })
     }
 }
 
 impl<'a> From<&RequestInfoNT> for Text<'a> {
     fn from(request_info: &RequestInfoNT) -> Text<'a> {
-        let mut text = String::from(&request_info.0.method);
+        let mut text = String::new();
+        text.push_str(request_info.0.method.as_str());
         text.push(' ');
-        text.push_str(&request_info.0.uri);
+        text.push_str(&request_info.0.uri.to_string());
         text.push(' ');
-        text.push_str(&request_info.0.version);
-        for (k, v) in &request_info.0.headers {
-            text += "\n";
-            text += k;
-            text += " : ";
-            text += v;
+        text.push_str(&format!("{:?}", request_info.0.version));
+        for (k, v) in request_info.0.headers.iter() {
+            text.push('\n');
+            text.push_str(k.as_str());
+            text.push_str(" : ");
+            text.push_str(v.to_str().unwrap_or("invalid header value"));
         }
         Text::from(text)
     }

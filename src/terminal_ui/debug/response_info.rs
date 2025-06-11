@@ -1,41 +1,32 @@
+use hyper::body::Incoming;
 use gradient_tui_fork::text::Text;
-use std::collections::HashMap;
-use hyper::{Body, Response};
-
 use crate::utility::log::ResponseInfo;
+
+type FipsBody = Incoming;
 
 pub struct ResponseInfoNT(pub ResponseInfo);
 
-impl From<&Response<Body>> for ResponseInfoNT {
-    fn from(response: &Response<Body>) -> ResponseInfoNT {
-        let status = String::from(response.status().clone().as_str());
-        let version = format!("{:?}", response.version().clone());
-        let mut headers = HashMap::new();
-        for (k, v) in response.headers() {
-            headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
-            );
-        }
+impl From<&hyper::Response<FipsBody>> for ResponseInfoNT {
+    fn from(response: &hyper::Response<FipsBody>) -> ResponseInfoNT {
         ResponseInfoNT(ResponseInfo {
-            response_type: String::from("placeholder"),
-            status,
-            version,
-            headers,
+            status: response.status(),
+            version: response.version(),
+            headers: response.headers().clone(),
         })
     }
 }
 
 impl<'a> From<&ResponseInfoNT> for Text<'a> {
-    fn from(request_info: &ResponseInfoNT) -> Text<'a> {
-        let mut text = String::from(&request_info.0.status);
+    fn from(response_info: &ResponseInfoNT) -> Text<'a> {
+        let mut text = String::new();
+        text.push_str(&response_info.0.status.to_string());
         text.push(' ');
-        text.push_str(&request_info.0.version);
-        for (k, v) in &request_info.0.headers {
-            text += "\n";
-            text += k;
-            text += " : ";
-            text += v;
+        text.push_str(&format!("{:?}", response_info.0.version));
+        for (k, v) in response_info.0.headers.iter() {
+            text.push('\n');
+            text.push_str(k.as_str());
+            text.push_str(" : ");
+            text.push_str(v.to_str().unwrap_or("invalid header value"));
         }
         Text::from(text)
     }

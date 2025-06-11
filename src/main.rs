@@ -56,7 +56,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //TODO: get rid of duplication caused by introduction of async mutex
     let async_configuration = Arc::new(AsyncMutex::new(
-        Config::load(&cli_options.config).unwrap_or_default(),
+        {
+            let mut config = Config::new();
+            for path in &cli_options.config {
+                config.reload(path.to_str().unwrap_or_default()).unwrap_or_default();
+            }
+            config
+        },
     ));
 
     let (_state, _app, logging) = {
@@ -77,8 +83,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = Runtime::new().unwrap();
     let _guard = runtime.enter();
 
+    log::info!("FIPS is starting on http://{}", addr);
+
     let _rt_handle =
-        backend::spawn_backend(&async_configuration, &addr, &logging);
+        backend::spawn_backend(async_configuration.clone(), addr, logging.clone());
 
     #[cfg(feature = "ui")]
     {

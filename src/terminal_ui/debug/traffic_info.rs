@@ -11,11 +11,12 @@ pub struct LoggableNT(pub LoggableType);
 impl fmt::Display for LoggableNT {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let info_string = match &self.0 {
-            LoggableType::IncomingResponseFromServer(_) => "Incoming Response",
-            LoggableType::OutGoingResponseFromFips(_) => "Outgoing Response",
-            LoggableType::OutgoingRequestToServer(_) => "Outgoing Request",
-            LoggableType::IncomingRequestAtFfips(_) => "Incoming Request",
-            _ => "",
+            LoggableType::IncomingResponseAtFips(_) => "Incoming Response at FIPS",
+            LoggableType::OutgoingResponseAtFips(_) => "Outgoing Response from FIPS",
+            LoggableType::OutgoingRequestToServer(_) => "Outgoing Request to Server",
+            LoggableType::IncomingRequestAtFips(_) => "Incoming Request at FIPS",
+            LoggableType::IncomingResponseFromServer(_) => "Incoming Response from Server",
+            LoggableType::Plain => "",
         };
         write!(f, "{info_string}")
     }
@@ -24,12 +25,13 @@ impl fmt::Display for LoggableNT {
 impl<'a> From<&LoggableNT> for Text<'a> {
     fn from(traffic_info: &LoggableNT) -> Text<'a> {
         match &traffic_info.0 {
-            LoggableType::OutgoingRequestToServer(i) | LoggableType::IncomingRequestAtFfips(i) => {
+            LoggableType::OutgoingRequestToServer(i) | LoggableType::IncomingRequestAtFips(i) => {
                 Text::from(&RequestInfoNT(i.clone()))
             }
-            LoggableType::IncomingResponseFromServer(i)
-            | LoggableType::OutGoingResponseFromFips(i) => Text::from(&ResponseInfoNT(i.clone())),
-            _ => Text::from(""),
+            LoggableType::IncomingResponseFromServer(i) |
+            LoggableType::IncomingResponseAtFips(i) |
+            LoggableType::OutgoingResponseAtFips(i) => Text::from(&ResponseInfoNT(i.clone())),
+            LoggableType::Plain => Text::from(""),
         }
     }
 }

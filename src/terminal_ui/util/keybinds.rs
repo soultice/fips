@@ -1,6 +1,6 @@
 use crokey::key;
 
-use crate:: terminal_ui::{cli::App, debug::PrintInfo};
+use crate::terminal_ui::{cli::App, debug::PrintInfo};
 use eyre::Result;
 
 pub async fn match_keybinds(
@@ -21,16 +21,15 @@ pub async fn match_keybinds(
             key!(shift-backtab) => app.go_to_previous_tab(),
             key!(tab) => app.go_to_next_tab(),
             key!(r) => {
-                app.state
-                    .configuration
-                    .lock()
-                    .await
-                    .reload(&app.opts.config)?;
-                app.state
-                    .add_message(PrintInfo::Plain(String::from(
-                        "Config files reloaded",
-                    )))
-                    .unwrap_or_default();
+                // Convert Vec<PathBuf> to Vec<String>
+                let paths: Vec<String> = app.opts.config.iter()
+                    .filter_map(|p| p.to_str().map(String::from))
+                    .collect();
+                    
+                // Reload using the first config path
+                if let Some(path) = paths.first() {
+                    app.state.configuration.lock().await.reload(path)?;
+                }
             }
             key!(c) => {
                 *app.state.messages.lock().unwrap() = Vec::new();
@@ -38,7 +37,7 @@ pub async fn match_keybinds(
             }
             key!(enter) => {
                 if app.tabs.index == 2 {
-                    app.state.configuration.lock().await.toggle_rule()
+                    app.state.configuration.lock().await.toggle_rule();
                 }
             }
             key!(down) => {

@@ -1,2 +1,2 @@
 pub mod routes;
-pub use routes::routes;
+pub use routes::handle_request;
