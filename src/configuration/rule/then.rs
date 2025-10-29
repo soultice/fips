@@ -29,3 +29,78 @@ pub enum Then {
         headers: Option<HashMap<String, String>>,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_then_mock_deserialization() {
+        let yaml = r#"
+functionAs: Mock
+body:
+  message: "Hello"
+status: "200"
+headers:
+  Content-Type: "application/json"
+"#;
+        let then: Result<Then, _> = serde_yaml::from_str(yaml);
+        assert!(then.is_ok());
+        
+        if let Then::Mock { body, status, headers } = then.unwrap() {
+            assert!(body.is_some());
+            assert_eq!(status.as_ref().unwrap(), "200");
+            assert!(headers.is_some());
+        } else {
+            panic!("Expected Mock variant");
+        }
+    }
+
+    #[test]
+    fn test_then_proxy_deserialization() {
+        let yaml = r#"
+functionAs: Proxy
+forwardUri: "http://localhost:8080"
+"#;
+        let then: Result<Then, _> = serde_yaml::from_str(yaml);
+        assert!(then.is_ok());
+        
+        if let Then::Proxy { forward_uri, .. } = then.unwrap() {
+            assert_eq!(forward_uri, "http://localhost:8080");
+        } else {
+            panic!("Expected Proxy variant");
+        }
+    }
+
+    #[test]
+    fn test_then_fips_deserialization() {
+        let yaml = r#"
+functionAs: Fips
+forwardUri: "http://localhost:9090"
+"#;
+        let then: Result<Then, _> = serde_yaml::from_str(yaml);
+        assert!(then.is_ok());
+        
+        if let Then::Fips { forward_uri, .. } = then.unwrap() {
+            assert_eq!(forward_uri, "http://localhost:9090");
+        } else {
+            panic!("Expected Fips variant");
+        }
+    }
+
+    #[test]
+    fn test_then_static_deserialization() {
+        let yaml = r#"
+functionAs: Static
+baseDir: "./static"
+"#;
+        let then: Result<Then, _> = serde_yaml::from_str(yaml);
+        assert!(then.is_ok());
+        
+        if let Then::Static { static_base_dir } = then.unwrap() {
+            assert_eq!(static_base_dir.as_ref().unwrap(), "./static");
+        } else {
+            panic!("Expected Static variant");
+        }
+    }
+}

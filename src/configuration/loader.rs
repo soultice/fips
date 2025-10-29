@@ -24,7 +24,7 @@ pub enum DeserializationError {
 }
 
 pub struct YamlFileLoader {
-    pub(crate) extensions: Vec<String>,
+    pub extensions: Vec<String>,
 }
 
 impl YamlFileLoader {
@@ -35,12 +35,14 @@ impl YamlFileLoader {
         let regex_matcher = RegexSet::new(&self.extensions)?;
         let p = f?.path();
         let c = p.clone();
-        let ext = p
-            .extension()
+        
+        // Match against full filename, not just extension
+        let filename = p
+            .file_name()
+            .and_then(|f| f.to_str())
             .ok_or(DeserializationError::MissingExtension)?;
-        let matches_allowed_ext = regex_matcher.is_match(
-            ext.to_str().ok_or(DeserializationError::MissingExtension)?,
-        );
+        
+        let matches_allowed_ext = regex_matcher.is_match(filename);
 
         if matches_allowed_ext {
             let file_buffer = std::fs::File::open(p)?;
@@ -65,22 +67,28 @@ impl YamlFileLoader {
     ) -> Result<Vec<RuleSet>, DeserializationError> {
         let mut dir_contents: Vec<RuleSet> = Vec::new();
 
-        let mut all_files = directories
-            .iter()
-            .flat_map(|p| {
-                fs::read_dir(p)
-                    .unwrap()
-                    .map(|f| f.unwrap())
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        let mut all_files = Vec::new();
+        for p in directories {
+            let dir_entries = fs::read_dir(p)?;
+            for entry in dir_entries {
+                all_files.push(entry?);
+            }
+        }
 
         all_files.sort_by_key(|f| f.path());
 
         for file in all_files {
-            let deserialized_rules = self.deserialize_file(Ok(file))?;
-            log::info!("deserialized rules: {:?}", deserialized_rules);
-            dir_contents.extend(deserialized_rules);
+            match self.deserialize_file(Ok(file)) {
+                Ok(rules) => {
+                    log::info!("deserialized rules: {:?}", rules);
+                    dir_contents.extend(rules);
+                }
+                Err(DeserializationError::ForbiddenExtension) => {
+                    // Skip files with wrong extension
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
         }
         Ok(dir_contents)
     }

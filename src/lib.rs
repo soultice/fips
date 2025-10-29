@@ -1,4 +1,6 @@
+pub mod configuration;
 pub mod plugin_registry;
+
 pub use plugin_registry::{InvocationError, PluginDeclaration, PluginRegistrar, Function};
 pub use plugin_registry::plugin::{RUSTC_VERSION, CORE_VERSION};
 

@@ -1,0 +1,80 @@
+- Rule:
+    name: "System Callout Demo - Safe Example"
+    when:
+      matchesUris:
+        - uri: ^/demo/safe$
+    then:
+      functionAs: "Mock"
+      body:
+        message: "Safe system information"
+        date: "{{SystemCommand}}"
+        username: "{{SystemCommand}}"
+        uptime: "{{SystemCommand}}"
+      status: "200"
+      headers:
+        Content-Type: "application/json"
+        X-Warning: "System callout plugin active"
+    with:
+      plugins:
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["date"]
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["whoami"]
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["uptime"]
+
+- Rule:
+    name: "System Callout Demo - Dangerous Example"
+    when:
+      matchesUris:
+        - uri: ^/demo/dangerous$
+    then:
+      functionAs: "Mock"
+      body:
+        warning: "⚠️ THIS DEMONSTRATES DANGEROUS CAPABILITIES ⚠️"
+        env_home: "{{GetEnvVar}}"
+        env_user: "{{GetEnvVar}}"
+        file_content: "{{ReadFile}}"
+        http_response: "{{HttpRequest}}"
+      status: "200"
+      headers:
+        Content-Type: "application/json"
+        X-Security-Warning: "DANGEROUS OPERATIONS PERFORMED"
+    with:
+      plugins:
+        - name: "GetEnvVar"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["HOME"]
+        - name: "GetEnvVar"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["USER"]
+        - name: "ReadFile"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["./Cargo.toml"]
+        - name: "HttpRequest"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["http://httpbin.org/ip"]
+
+- Rule:
+    name: "System Callout Demo - Command Injection Risk"
+    when:
+      matchesUris:
+        - uri: ^/demo/injection$
+    then:
+      functionAs: "Mock"
+      body:
+        warning: "⚠️ DEMONSTRATES COMMAND INJECTION VULNERABILITY ⚠️"
+        ls_output: "{{SystemCommand}}"
+        explanation: "If user input reaches this, they can run ANY command"
+        impact: "Full system compromise, data exfiltration, lateral movement"
+      status: "200"
+      headers:
+        Content-Type: "application/json"
+    with:
+      plugins:
+        - name: "SystemCommand"
+          path: "./plugins/system_callout/target/release/libsystem_callout.dylib"
+          args: ["ls", "-la", "/etc"]

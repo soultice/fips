@@ -67,7 +67,9 @@ impl Rule {
                 .body_contains
                 .as_ref()
                 .map_or(true, |body_contains| {
-                    intermediary.body.as_str().unwrap().contains(body_contains)
+                    // Convert body to string and check if it contains the pattern
+                    let body_str = intermediary.body.to_string();
+                    body_str.contains(body_contains)
                 });
 
         if !some_body_contains {
