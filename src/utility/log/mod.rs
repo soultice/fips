@@ -1,6 +1,6 @@
 // Type definitions for logging, implementation is left to the respective crates
 use std::collections::HashMap;
-use hyper::{Body, Response, Request};
+use hyper::{Response, Request};
 
 #[derive(Debug, Clone)]
 pub struct RequestInfo {
@@ -11,8 +11,8 @@ pub struct RequestInfo {
     pub headers: HashMap<String, String>,
 }
 
-impl From<&Request<Body>> for RequestInfo {
-    fn from(request: &Request<Body>) -> RequestInfo {
+impl<B> From<&Request<B>> for RequestInfo {
+    fn from(request: &Request<B>) -> RequestInfo {
         let method = String::from(request.method().clone().as_str());
         let uri = request.uri().clone().to_string();
         let version = format!("{:?}", request.version().clone());
@@ -41,8 +41,8 @@ pub struct ResponseInfo {
     pub headers: HashMap<String, String>,
 }
 
-impl From<&Response<Body>> for ResponseInfo {
-    fn from(response: &Response<Body>) -> ResponseInfo {
+impl<B> From<&Response<B>> for ResponseInfo {
+    fn from(response: &Response<B>) -> ResponseInfo {
         let status = String::from(response.status().clone().as_str());
         let version = format!("{:?}", response.version().clone());
         let mut headers = HashMap::new();

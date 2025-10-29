@@ -1,9 +1,11 @@
 use std::str::FromStr;
 
+use bytes::Bytes;
 use http::{
-    header::HeaderName, HeaderMap, HeaderValue, Method, Uri,
+    header::HeaderName, HeaderValue, Method, Uri,
 };
-use hyper::{Body, Request, Response};
+use hyper::{Request, Response};
+use http_body_util::{Full, BodyExt};
 use json_dotpath::DotPaths;
 
 use super::rule::{ Rule, error::ConfigurationError, then::Then} ;
@@ -94,7 +96,7 @@ impl RuleAndIntermediaryHolder {
 }
 
 //convert from holder to hyper request
-impl TryFrom<&RuleAndIntermediaryHolder> for Request<Body> {
+impl TryFrom<&RuleAndIntermediaryHolder> for Request<Full<Bytes>> {
     type Error = ConfigurationError;
 
     fn try_from(
@@ -136,13 +138,13 @@ impl TryFrom<&RuleAndIntermediaryHolder> for Request<Body> {
                 .clone()
                 .ok_or(ConfigurationError::NoMethodError)?,
         );
-        Ok(builder.body(Body::from(holder.intermediary.body.to_string()))?)
+        Ok(builder.body(Full::new(Bytes::from(holder.intermediary.body.to_string())))?)
     }
 }
 
 // convert to response
-impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Body> {
-    type Output = Response<Body>;
+impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
+    type Output = Response<Full<Bytes>>;
     async fn async_try_from(
         holder: RuleAndIntermediaryHolder,
     ) -> Result<Self> {
@@ -256,31 +258,21 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Body> {
             //nothing
             Then::Static { static_base_dir } => {
                 if let Some(path) = static_base_dir {
-                    let static_path = hyper_staticfile::resolve_path(
-                        path,
-                        holder
-                            .intermediary
-                            .uri
-                            .clone()
-                            .wrap_err("could not retrieve uri")?
-                            .path(),
-                    )
-                    .await
-                    .unwrap();
-
-                    let header_name = HeaderName::from_static("x-static");
-                    let header_value = HeaderValue::from_str(path)?;
-                    let resp = hyper_staticfile::ResponseBuilder::new()
-                        .request_parts(
-                            holder.intermediary.method.as_ref().wrap_err("could not retrieve method")?,
-                            &holder.intermediary.uri.clone().wrap_err("could not retrieve uri")?,
-                            &HeaderMap::from_iter(vec![(
-                                header_name,
-                                header_value,
-                            )]),
-                        )
-                        .build(static_path)?;
-                    return Ok(resp);
+                    // Build a fake request to use with hyper-staticfile
+                    let fake_request = Request::builder()
+                        .method(holder.intermediary.method.as_ref().wrap_err("could not retrieve method")?)
+                        .uri(holder.intermediary.uri.clone().wrap_err("could not retrieve uri")?)
+                        .body(Full::new(Bytes::new()))?;
+                    
+                    let resp = hyper_staticfile::Static::new(std::path::Path::new(path))
+                        .serve(fake_request)
+                        .await?;
+                    
+                    // Convert the hyper_staticfile response to our Response<Full<Bytes>> type
+                    let (parts, body) = resp.into_parts();
+                    let body_bytes = body.collect().await?.to_bytes();
+                    let converted_resp = Response::from_parts(parts, Full::new(body_bytes));
+                    return Ok(converted_resp);
                 }
             }
         };
@@ -309,7 +301,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Body> {
 
         holder.apply_plugins(preemtive_body)?;
 
-        let resp_body = Body::from(preemtive_body.to_string());
+        let resp_body = Full::new(Bytes::from(preemtive_body.to_string()));
 
         //flush the header map
         builder

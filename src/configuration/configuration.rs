@@ -1,18 +1,12 @@
-use bytes::Buf;
-use eyre::{eyre, Context, ContextCompat, Result};
-use http::{
-    header::HeaderName, HeaderMap, HeaderValue, Method, StatusCode, Uri,
-};
-use hyper::{Body, Request, Response};
-use json_dotpath::DotPaths;
+use eyre::{eyre, Result};
 use lazy_static::lazy_static;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::plugin_registry::{ExternalFunctions, InvocationError};
+use crate::plugin_registry::ExternalFunctions;
 
 use super::loader::{DeserializationError, YamlFileLoader};
 

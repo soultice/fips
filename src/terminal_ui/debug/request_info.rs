@@ -1,4 +1,4 @@
-use hyper::{Body, Request};
+use hyper::Request;
 use std::collections::HashMap;
 use gradient_tui_fork::text::Text;
 
@@ -6,8 +6,8 @@ use crate::utility::log::RequestInfo;
 
 pub struct RequestInfoNT(pub RequestInfo);
 
-impl From<&Request<Body>> for RequestInfoNT {
-    fn from(request: &Request<Body>) -> RequestInfoNT {
+impl<B> From<&Request<B>> for RequestInfoNT {
+    fn from(request: &Request<B>) -> RequestInfoNT {
         let method = String::from(request.method().clone().as_str());
         let uri = request.uri().clone().to_string();
         let version = format!("{:?}", request.version().clone());

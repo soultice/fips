@@ -1,13 +1,13 @@
 use gradient_tui_fork::text::Text;
 use std::collections::HashMap;
-use hyper::{Body, Response};
+use hyper::Response;
 
 use crate::utility::log::ResponseInfo;
 
 pub struct ResponseInfoNT(pub ResponseInfo);
 
-impl From<&Response<Body>> for ResponseInfoNT {
-    fn from(response: &Response<Body>) -> ResponseInfoNT {
+impl<B> From<&Response<B>> for ResponseInfoNT {
+    fn from(response: &Response<B>) -> ResponseInfoNT {
         let status = String::from(response.status().clone().as_str());
         let version = format!("{:?}", response.version().clone());
         let mut headers = HashMap::new();

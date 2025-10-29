@@ -38,7 +38,7 @@ use crate::{
     },
     PaintLogsCallbacks,
 };
-use eyre::{Context, ContextCompat, Result};
+use eyre::{ContextCompat, Result};
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
