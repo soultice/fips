@@ -156,11 +156,18 @@ impl Config {
                 RuleSet::Rule(rule) => {
                     if let Some(with) = &rule.with {
                         if let Some(plugins) = &with.plugins {
+                            // Create a single ExternalFunctions instance for this rule
+                            let mut external_functions = ExternalFunctions::default();
+                            
+                            // Load all plugins for this rule into the same instance
                             for plugin in plugins {
                                 let path = PathBuf::from(&plugin.path);
                                 let absolute_path = path.canonicalize()?;
-                                let external_functions =
-                                    ExternalFunctions::new(&absolute_path);
+                                external_functions.load_from_file(&absolute_path)?;
+                            }
+                            
+                            // Only set if we successfully loaded at least one plugin
+                            if !plugins.is_empty() {
                                 rule.plugins = Some(external_functions);
                             }
                         }

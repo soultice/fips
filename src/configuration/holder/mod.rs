@@ -27,7 +27,13 @@ impl RuleAndIntermediaryHolder {
         if let Some(plugins) = &self.rule.plugins {
             match next {
                 serde_json::Value::String(plugin_name) => {
-                    if plugins.has(plugin_name) {
+                    // Strip {{ and }} from the plugin placeholder
+                    let stripped_name = plugin_name
+                        .strip_prefix("{{")
+                        .and_then(|s| s.strip_suffix("}}"))
+                        .unwrap_or(plugin_name);
+                    
+                    if plugins.has(stripped_name) {
                         let rule_plugins = &self
                             .rule
                             .clone()
@@ -38,13 +44,13 @@ impl RuleAndIntermediaryHolder {
 
                         let plugin_config = rule_plugins
                             .iter()
-                            .find(|p| p.name == *plugin_name)
+                            .find(|p| p.name == stripped_name)
                             .ok_or(ConfigurationError::PluginNotFound)?;
 
                         let plugin_args =
                             plugin_config.args.clone().unwrap_or_default();
 
-                        let result = plugins.call(plugin_name, plugin_args)?;
+                        let result = plugins.call(stripped_name, plugin_args)?;
 
                         // try to deserialize, if it fails, parse it into a string
                         let try_serialize = serde_json::from_str(&result);

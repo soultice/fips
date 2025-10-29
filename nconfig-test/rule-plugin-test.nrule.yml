@@ -1,0 +1,47 @@
+- Rule:
+    name: "Plugin Test - Timestamp"
+    when:
+      matchesUris:
+        - uri: ^/plugin-test$
+    then:
+      functionAs: "Mock"
+      body: 
+        message: "Hello from plugin!"
+        timestamp: "{{Timestamp}}"
+        uppercase: "{{Uppercase}}"
+        reversed: "{{Reverse}}"
+      status: "200" 
+      headers:
+        Content-Type: "application/json"
+    with:
+      plugins:
+        - name: "Timestamp"
+          path: './plugins/test_timestamp/target/release/libtest_timestamp.dylib'
+        - name: "Uppercase"
+          path: './plugins/test_timestamp/target/release/libtest_timestamp.dylib'
+          args: ["hello world"]
+        - name: "Reverse"
+          path: './plugins/test_timestamp/target/release/libtest_timestamp.dylib'
+          args: ["FIPS"]
+
+- Rule:
+    name: "Plugin Test - Dynamic Values"
+    when:
+      matchesUris:
+        - uri: ^/dynamic$
+    then:
+      functionAs: "Mock"
+      body: 
+        generated_at: "{{Timestamp}}"
+        request_id: "{{Reverse}}"
+      status: "200" 
+      headers:
+        Content-Type: "application/json"
+        X-Generated: "{{Timestamp}}"
+    with:
+      plugins:
+        - name: "Timestamp"
+          path: './plugins/test_timestamp/target/release/libtest_timestamp.dylib'
+        - name: "Reverse"
+          path: './plugins/test_timestamp/target/release/libtest_timestamp.dylib'
+          args: ["REQ-12345"]
