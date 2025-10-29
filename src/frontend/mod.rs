@@ -121,14 +121,15 @@ pub async fn spawn_frontend(
                 rule.plugins.as_ref().map(|plugins| {
                     let functions = plugins.functions.lock().unwrap();
                     let function_names: Vec<String> = functions.keys().cloned().collect();
-                    (rule.name.clone(), function_names)
+                    (&rule.name, function_names)
                 })
             })
             .flat_map(|(rule_name, function_names)| {
+                let rule_name = rule_name.to_string();
                 function_names.into_iter().map(move |func_name| {
                     Spans::from(vec![
                         Span::styled(
-                            format!("[{}] ", rule_name),
+                            format!("[{}] ", &rule_name),
                             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                         ),
                         Span::raw(func_name)
@@ -220,8 +221,8 @@ pub async fn setup(
         traffic_info: Mutex::new(vec![]),
     });
 
-    let app = App::new(true, state.clone(), options);
+    let app = App::new(true, Arc::clone(&state), options);
 
-    let logging = Arc::new(define_log_callbacks(app.state.clone()));
+    let logging = Arc::new(define_log_callbacks(Arc::clone(&state)));
     (Some(state), Some(app), logging)
 }

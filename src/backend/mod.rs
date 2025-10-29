@@ -1,9 +1,9 @@
 // spawns the hyper server on a separate thread
 use hyper::body::Incoming;
-use hyper::server::conn::http2;
 use hyper::service::service_fn;
 use hyper::Request;
 use hyper_util::rt::TokioIo;
+use hyper_util::server::conn::auto;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -49,7 +49,7 @@ pub fn spawn_backend(
                     }
                 });
                 
-                if let Err(err) = http2::Builder::new(hyper_util::rt::TokioExecutor::new())
+                if let Err(err) = auto::Builder::new(hyper_util::rt::TokioExecutor::new())
                     .serve_connection(io, service)
                     .await
                 {

@@ -20,11 +20,12 @@ pub struct RuleAndIntermediaryHolder {
 }
 
 impl RuleAndIntermediaryHolder {
-    pub fn apply_plugins(
-        &self,
+    fn apply_plugins_to_body(
+        rule: &Rule,
+        plugins: &crate::plugin_registry::ExternalFunctions,
         next: &mut serde_json::Value,
     ) -> Result<(), ConfigurationError> {
-        if let Some(plugins) = &self.rule.plugins {
+        {
             match next {
                 serde_json::Value::String(plugin_name) => {
                     // Strip {{ and }} from the plugin placeholder
@@ -34,12 +35,10 @@ impl RuleAndIntermediaryHolder {
                         .unwrap_or(plugin_name);
                     
                     if plugins.has(stripped_name) {
-                        let rule_plugins = &self
-                            .rule
-                            .clone()
+                        let rule_plugins = rule
                             .with
-                            .ok_or(ConfigurationError::PluginNotFound)?
-                            .plugins
+                            .as_ref()
+                            .and_then(|w| w.plugins.as_ref())
                             .ok_or(ConfigurationError::PluginNotFound)?;
 
                         let plugin_config = rule_plugins
@@ -47,8 +46,9 @@ impl RuleAndIntermediaryHolder {
                             .find(|p| p.name == stripped_name)
                             .ok_or(ConfigurationError::PluginNotFound)?;
 
-                        let plugin_args =
-                            plugin_config.args.clone().unwrap_or_default();
+                        let plugin_args = plugin_config.args.as_ref()
+                            .cloned()
+                            .unwrap_or_default();
 
                         let result = plugins.call(stripped_name, plugin_args)?;
 
@@ -63,7 +63,7 @@ impl RuleAndIntermediaryHolder {
                 }
                 serde_json::Value::Array(val) => {
                     for i in val {
-                        self.apply_plugins(i)?;
+                        Self::apply_plugins_to_body(rule, plugins, i)?;
                     }
                 }
                 serde_json::Value::Object(val) => {
@@ -89,7 +89,7 @@ impl RuleAndIntermediaryHolder {
                         }
                         _ => {
                             for (_, i) in val {
-                                self.apply_plugins(i)?;
+                                Self::apply_plugins_to_body(rule, plugins, i)?;
                             }
                         }
                     }
@@ -141,8 +141,9 @@ impl TryFrom<&RuleAndIntermediaryHolder> for Request<Full<Bytes>> {
             holder
                 .intermediary
                 .method
-                .clone()
-                .ok_or(ConfigurationError::NoMethodError)?,
+                .as_ref()
+                .ok_or(ConfigurationError::NoMethodError)?
+                .clone(),
         );
         Ok(builder.body(Full::new(Bytes::from(holder.intermediary.body.to_string())))?)
     }
@@ -152,11 +153,8 @@ impl TryFrom<&RuleAndIntermediaryHolder> for Request<Full<Bytes>> {
 impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
     type Output = Response<Full<Bytes>>;
     async fn async_try_from(
-        holder: RuleAndIntermediaryHolder,
+        mut holder: RuleAndIntermediaryHolder,
     ) -> Result<Self> {
-        let preemtive_body = &mut holder.intermediary.body.clone();
-        let preemtive_header_map = &mut holder.intermediary.headers.clone();
-
         let mut builder = holder
             .intermediary
             .headers
@@ -166,7 +164,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
             });
 
         builder.headers_mut().wrap_err("hyper object has no headers")?.remove("content-length");
-        preemtive_header_map.remove(HeaderName::from_static("content-length"));
+        holder.intermediary.headers.remove(HeaderName::from_static("content-length"));
 
         match &holder.rule.then {
             //plugins/transformation/status/headers
@@ -184,7 +182,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                     //morph body
                     if let Some(manipulator) = &modify.body {
                         manipulator.iter().for_each(|m| {
-                            preemtive_body
+                            holder.intermediary.body
                                 .dot_set(&m.at, &m.with)
                                 .wrap_err("invalid 'at' in rule").unwrap();
                         });
@@ -192,16 +190,16 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
 
                     if let Some(headers) = &modify.delete_headers {
                         for h in headers {
-                            if preemtive_header_map.contains_key(h) {
-                                preemtive_header_map.remove(h);
+                            if holder.intermediary.headers.contains_key(h) {
+                                holder.intermediary.headers.remove(h);
                             }
                         }
                     }
 
                     if let Some(add_headers) = &modify.set_headers {
                         for (key, value) in add_headers.iter() {
-                            if preemtive_header_map.contains_key(key) {
-                                preemtive_header_map.remove(key);
+                            if holder.intermediary.headers.contains_key(key) {
+                                holder.intermediary.headers.remove(key);
                             }
                             builder = builder.header(key, value);
                         }
@@ -221,11 +219,11 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                     builder = builder.status(hyper::StatusCode::OK)
                 }
                 if let Some(body) = body {
-                    *preemtive_body = body.clone();
+                    holder.intermediary.body = body.clone();
                 }
                 if let Some(headers) = headers {
                     for (key, value) in headers.iter() {
-                        preemtive_header_map.insert(
+                        holder.intermediary.headers.insert(
                             HeaderName::from_str(key)?,
                             HeaderValue::from_str(value)?,
                         );
@@ -244,7 +242,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                     }
                     if let Some(add_headers) = &modify_response.add_headers {
                         for (key, value) in add_headers.iter() {
-                            preemtive_header_map.insert(
+                            holder.intermediary.headers.insert(
                                 HeaderName::from_str(key)?,
                                 HeaderValue::from_str(value)?,
                             );
@@ -254,8 +252,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                         &modify_response.delete_headers
                     {
                         for h in delete_headers {
-                            if preemtive_header_map.contains_key(h) {
-                                preemtive_header_map.remove(h);
+                            if holder.intermediary.headers.contains_key(h) {
+                                holder.intermediary.headers.remove(h);
                             }
                         }
                     }
@@ -267,7 +265,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                     // Build a fake request to use with hyper-staticfile
                     let fake_request = Request::builder()
                         .method(holder.intermediary.method.as_ref().wrap_err("could not retrieve method")?)
-                        .uri(holder.intermediary.uri.clone().wrap_err("could not retrieve uri")?)
+                        .uri(holder.intermediary.uri.as_ref().wrap_err("could not retrieve uri")?)
                         .body(Full::new(Bytes::new()))?;
                     
                     let resp = hyper_staticfile::Static::new(std::path::Path::new(path))
@@ -287,27 +285,33 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
         // FIXME: check if headers are already present, if so overwrite them
         log::info!("method: {:?}", holder.intermediary.method);
         if holder.intermediary.method.as_ref() == Some(&Method::OPTIONS) {
-            preemtive_header_map.insert(
+            holder.intermediary.headers.insert(
                 HeaderName::from_static("Access-Control-Allow-Origin"),
                 HeaderValue::from_static("*"),
             );
-            preemtive_header_map.insert(
+            holder.intermediary.headers.insert(
                 HeaderName::from_static("Access-Control-Allow-Methods"),
                 HeaderValue::from_static("*"),
             );
-            preemtive_header_map.insert(
+            holder.intermediary.headers.insert(
                 HeaderName::from_static("Access-Control-Allow-Headers"),
                 HeaderValue::from_static("*"),
             );
-            preemtive_header_map.insert(
+            holder.intermediary.headers.insert(
                 HeaderName::from_static("Access-Control-Max-Age"),
                 HeaderValue::from_static("86400"),
             );
         }
 
-        holder.apply_plugins(preemtive_body)?;
+        // Apply plugins - need to extract body temporarily to satisfy borrow checker
+        {
+            let body = &mut holder.intermediary.body;
+            if let Some(plugins) = &holder.rule.plugins {
+                RuleAndIntermediaryHolder::apply_plugins_to_body(&holder.rule, plugins, body)?;
+            }
+        }
 
-        let resp_body = Full::new(Bytes::from(preemtive_body.to_string()));
+        let resp_body = Full::new(Bytes::from(holder.intermediary.body.to_string()));
 
         //flush the header map
         builder
@@ -319,7 +323,7 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
         builder
             .headers_mut()
             .wrap_err("hyper object has no headers")?
-            .extend(preemtive_header_map.clone());
+            .extend(std::mem::take(&mut holder.intermediary.headers));
 
         Ok(builder.body(resp_body)?)
     }

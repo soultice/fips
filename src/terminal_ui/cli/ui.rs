@@ -44,8 +44,8 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
     let color_vec: Vec<Color> = colors.into_iter().map(|c| c.into()).collect();
 
     app.gradients = BorderGradients {
-        bottom: Some(color_vec.clone()),
-        top: Some(color_vec),
+        top: Some(color_vec.clone()),
+        bottom: Some(color_vec),
         ..Default::default()
     };
 
@@ -84,7 +84,7 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], main_info),
         1 => draw_info_tab(f, app, chunks[1], Arc::clone(&app.state)),
-        2 => draw_rules_tab(f, app, chunks[1], rules_list.clone()),
+        2 => draw_rules_tab(f, app, chunks[1], rules_list),
         3 => draw_plugins_tab(f, app, chunks[1], all_plugins),
         _ => {}
     };
@@ -155,7 +155,7 @@ fn draw_rules_tab<B>(
     )).border_gradients(_app.gradients.clone());
     let constraints = vec![Constraint::Min(5)];
     let chunks = Layout::default()
-        .constraints::<Vec<Constraint>>(constraints.clone())
+        .constraints::<Vec<Constraint>>(constraints)
         .split(area);
 
 
@@ -181,7 +181,7 @@ fn draw_info_tab<B>(
         .collect();
 
     let chunks = Layout::default()
-        .constraints::<Vec<Constraint>>(constraints.clone())
+        .constraints::<Vec<Constraint>>(constraints)
         .split(area);
 
     for (i, traffic_info) in response_info.iter().enumerate() {
@@ -192,7 +192,7 @@ fn draw_info_tab<B>(
                 .fg(Color::Magenta)
                 .add_modifier(Modifier::BOLD),
         ));
-        let paragraph = Paragraph::new(text[i].clone())
+        let paragraph = Paragraph::new(text[i].to_owned())
             .block(block)
             .wrap(Wrap { trim: true });
 
