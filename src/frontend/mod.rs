@@ -130,7 +130,7 @@ pub async fn spawn_frontend(
                     Spans::from(vec![
                         Span::styled(
                             format!("[{}] ", &rule_name),
-                            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                         ),
                         Span::raw(func_name)
                     ])
