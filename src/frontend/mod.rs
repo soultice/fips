@@ -7,7 +7,11 @@ use crossterm::{
     },
 };
 use gradient_tui_fork::{
-    backend::CrosstermBackend, text::Spans, widgets::List, Terminal,
+    backend::CrosstermBackend,
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::List,
+    Terminal,
 };
 use std::{
     io::stdout,
@@ -38,7 +42,7 @@ use crate::{
     },
     PaintLogsCallbacks,
 };
-use eyre::{Context, ContextCompat, Result};
+use eyre::{ContextCompat, Result};
 use std::panic;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -113,15 +117,25 @@ pub async fn spawn_frontend(
             .rules
             .iter()
             .map(|x| x.into_inner())
-            .flat_map(|x| &x.plugins)
-            .cloned()
-            .flat_map(|x| {
-                let functions = x.functions.lock().unwrap();
-                let copied_keys =
-                    functions.keys().cloned().collect::<Vec<String>>();
-                copied_keys
+            .filter_map(|rule| {
+                rule.plugins.as_ref().map(|plugins| {
+                    let functions = plugins.functions.lock().unwrap();
+                    let function_names: Vec<String> = functions.keys().cloned().collect();
+                    (&rule.name, function_names)
+                })
             })
-            .map(Spans::from)
+            .flat_map(|(rule_name, function_names)| {
+                let rule_name = rule_name.to_string();
+                function_names.into_iter().map(move |func_name| {
+                    Spans::from(vec![
+                        Span::styled(
+                            format!("[{}] ", &rule_name),
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                        ),
+                        Span::raw(func_name)
+                    ])
+                })
+            })
             .collect();
 
         let wrapper = ConfigurationNewtype(unwrapped_app.state.configuration.clone());
@@ -207,8 +221,8 @@ pub async fn setup(
         traffic_info: Mutex::new(vec![]),
     });
 
-    let app = App::new(true, state.clone(), options);
+    let app = App::new(true, Arc::clone(&state), options);
 
-    let logging = Arc::new(define_log_callbacks(app.state.clone()));
+    let logging = Arc::new(define_log_callbacks(Arc::clone(&state)));
     (Some(state), Some(app), logging)
 }

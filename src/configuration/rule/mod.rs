@@ -42,8 +42,8 @@ impl Rule {
         )?;
 
         let uri = intermediary
-            .clone()
             .uri
+            .as_ref()
             .wrap_err("could not retrieve uri")?;
 
         let some_uris_match = uri_regex.is_match(uri.path());
@@ -55,7 +55,7 @@ impl Rule {
             self.when.matches_methods.as_ref().map_or(true, |methods| {
                 methods
                     .iter()
-                    .any(|m| m == intermediary.clone().method.unwrap().as_str())
+                    .any(|m| intermediary.method.as_ref().map_or(false, |method| m == method.as_str()))
             });
 
         if !some_methods_match {

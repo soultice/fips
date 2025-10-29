@@ -8,10 +8,15 @@ use crate::{
     PaintLogsCallbacks,
 };
 
+use bytes::Bytes;
 use hyper::{
     header::{HeaderMap, HeaderValue},
-    Body, Client, Method, Request, Response, StatusCode,
+    Method, Request, Response, StatusCode,
 };
+use hyper::body::Incoming;
+use http_body_util::Full;
+use hyper_util::client::legacy::Client;
+use hyper_util::rt::TokioExecutor;
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -30,10 +35,10 @@ pub enum RoutingError {
 
 // this should be segmented with better care, split into smaller functions, move everything possible from state to separate arguments
 pub async fn routes(
-    req: Request<Body>,
+    req: Request<Incoming>,
     configuration: Arc<AsyncMutex<Config>>,
     logging: &Arc<PaintLogsCallbacks>,
-) -> Result<Response<Body>> {
+) -> Result<Response<Full<Bytes>>> {
     let requestinfo = RequestInfo::from(&req);
 
     let log_output = Loggable {
@@ -48,13 +53,13 @@ pub async fn routes(
     //TODO clean up adding cors, have rule that makes sense here
     if let (Some(method), Some(uri)) = (&c.method, &c.uri) {
         if method == Method::OPTIONS {
-            let mut resp = Response::new(Body::empty());
+            let mut resp = Response::new(Full::new(Bytes::new()));
             add_cors_headers(resp.headers_mut());
             return Ok(resp);
         }
         if method == Method::OPTIONS && uri == "/favicon.ico" {
             //early return for favicon
-            return Ok(Response::new(Body::default()));
+            return Ok(Response::new(Full::default()));
         }
     }
     // find first matching rule
@@ -110,7 +115,7 @@ pub async fn routes(
             };
             (logging.0)(&log_output);
 
-            let client = Arc::new(Client::new());
+            let client = Client::builder(TokioExecutor::new()).build_http();
             let resp = client.request(request).await?;
 
             let responseinfo = ResponseInfo::from(&resp);
@@ -146,7 +151,7 @@ pub async fn routes(
     } else {
         //TODO create this from intermediary
         let mut no_matching_rule =
-            Response::new(Body::from("no matching rule found"));
+            Response::new(Full::new(Bytes::from("no matching rule found")));
         *no_matching_rule.status_mut() = StatusCode::NOT_FOUND;
 
         add_cors_headers(no_matching_rule.headers_mut());

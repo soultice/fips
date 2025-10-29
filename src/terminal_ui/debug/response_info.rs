@@ -1,20 +1,20 @@
 use gradient_tui_fork::text::Text;
 use std::collections::HashMap;
-use hyper::{Body, Response};
+use hyper::Response;
 
 use crate::utility::log::ResponseInfo;
 
 pub struct ResponseInfoNT(pub ResponseInfo);
 
-impl From<&Response<Body>> for ResponseInfoNT {
-    fn from(response: &Response<Body>) -> ResponseInfoNT {
-        let status = String::from(response.status().clone().as_str());
-        let version = format!("{:?}", response.version().clone());
+impl<B> From<&Response<B>> for ResponseInfoNT {
+    fn from(response: &Response<B>) -> ResponseInfoNT {
+        let status = String::from(response.status().as_str());
+        let version = format!("{:?}", response.version());
         let mut headers = HashMap::new();
         for (k, v) in response.headers() {
             headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
+                String::from(k.as_str()),
+                String::from(v.to_str().unwrap()),
             );
         }
         ResponseInfoNT(ResponseInfo {

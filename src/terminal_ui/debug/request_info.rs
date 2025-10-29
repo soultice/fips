@@ -1,4 +1,4 @@
-use hyper::{Body, Request};
+use hyper::Request;
 use std::collections::HashMap;
 use gradient_tui_fork::text::Text;
 
@@ -6,16 +6,16 @@ use crate::utility::log::RequestInfo;
 
 pub struct RequestInfoNT(pub RequestInfo);
 
-impl From<&Request<Body>> for RequestInfoNT {
-    fn from(request: &Request<Body>) -> RequestInfoNT {
-        let method = String::from(request.method().clone().as_str());
-        let uri = request.uri().clone().to_string();
-        let version = format!("{:?}", request.version().clone());
+impl<B> From<&Request<B>> for RequestInfoNT {
+    fn from(request: &Request<B>) -> RequestInfoNT {
+        let method = String::from(request.method().as_str());
+        let uri = request.uri().to_string();
+        let version = format!("{:?}", request.version());
         let mut headers = HashMap::new();
         for (k, v) in request.headers() {
             headers.insert(
-                String::from(k.clone().as_str()),
-                String::from(v.clone().to_str().unwrap()),
+                String::from(k.as_str()),
+                String::from(v.to_str().unwrap()),
             );
         }
         RequestInfoNT(RequestInfo {

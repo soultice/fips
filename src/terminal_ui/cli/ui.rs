@@ -44,8 +44,8 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
     let color_vec: Vec<Color> = colors.into_iter().map(|c| c.into()).collect();
 
     app.gradients = BorderGradients {
-        bottom: Some(color_vec.clone()),
-        top: Some(color_vec),
+        top: Some(color_vec.clone()),
+        bottom: Some(color_vec),
         ..Default::default()
     };
 
@@ -79,16 +79,29 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
         })
         .collect();
 
-    //TODO: display new plugins
     f.render_widget(tabs, chunks[0]);
 
     match app.tabs.index {
         0 => draw_first_tab(f, app, chunks[1], main_info),
         1 => draw_info_tab(f, app, chunks[1], Arc::clone(&app.state)),
-        2 => draw_rules_tab(f, app, chunks[1], rules_list.clone()),
-        3 => draw_first_tab(f, app, chunks[1], all_plugins),
+        2 => draw_rules_tab(f, app, chunks[1], rules_list),
+        3 => draw_plugins_tab(f, app, chunks[1], all_plugins),
         _ => {}
     };
+}
+
+fn draw_plugins_tab<B>(
+    f: &mut Frame<'_, B>,
+    _app: &mut App<'_>,
+    area: Rect,
+    plugins: Vec<Spans<'_>>,
+) where
+    B: Backend,
+{
+    let chunks = Layout::default()
+        .constraints([Constraint::Length(4)].as_ref())
+        .split(area);
+    draw_text(f, chunks[0], plugins, _app, "Loaded Plugins (by Rule)");
 }
 
 fn draw_first_tab<B>(
@@ -102,10 +115,10 @@ fn draw_first_tab<B>(
     let chunks = Layout::default()
         .constraints([Constraint::Length(4)].as_ref())
         .split(area);
-    draw_text(f, chunks[0], text, _app);
+    draw_text(f, chunks[0], text, _app, "Logs");
 }
 
-fn draw_text<B>(f: &mut Frame<B>, area: Rect, text: Vec<Spans>, _app: &mut App)
+fn draw_text<B>(f: &mut Frame<B>, area: Rect, text: Vec<Spans>, _app: &mut App, title: &str)
 where
     B: Backend,
 {
@@ -114,7 +127,7 @@ where
             Borders::LEFT | Borders::TOP | Borders::RIGHT | Borders::BOTTOM,
         )
         .title(Span::styled(
-            "Logs",
+            title,
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
@@ -142,7 +155,7 @@ fn draw_rules_tab<B>(
     )).border_gradients(_app.gradients.clone());
     let constraints = vec![Constraint::Min(5)];
     let chunks = Layout::default()
-        .constraints::<Vec<Constraint>>(constraints.clone())
+        .constraints::<Vec<Constraint>>(constraints)
         .split(area);
 
 
@@ -168,7 +181,7 @@ fn draw_info_tab<B>(
         .collect();
 
     let chunks = Layout::default()
-        .constraints::<Vec<Constraint>>(constraints.clone())
+        .constraints::<Vec<Constraint>>(constraints)
         .split(area);
 
     for (i, traffic_info) in response_info.iter().enumerate() {
@@ -179,7 +192,7 @@ fn draw_info_tab<B>(
                 .fg(Color::Magenta)
                 .add_modifier(Modifier::BOLD),
         ));
-        let paragraph = Paragraph::new(text[i].clone())
+        let paragraph = Paragraph::new(text[i].to_owned())
             .block(block)
             .wrap(Wrap { trim: true });
 

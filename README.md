@@ -51,145 +51,184 @@ See also the `examples` directory for more example configurations.
 1. Any request arriving at Fips with the URI `/foo/bar` will return `['this is a lot of fun']`
 
 ```yaml
-- Mock:
-    path: ^/foo/bar/$
-    rules:
-      - path: 
-        item: ['this is a lot of fun']
+- Rule:
+    name: "My Mock Rule"
+    when:
+      matchesUris:
+        - uri: ^/foo/bar$
+    then:
+      functionAs: "Mock"
+      body: ['this is a lot of fun']
+      status: "200"
 ```
 
 2. Any request against `/foo/*anything*/bar/` will be proxied to the server at `localhost:4041`, the `Authorization` Header will be forwarded
 
 ```yaml
-- Proxy:
-    path: ^/foo/.*/bar/$
-    forwardUri: 'http://localhost:4041'
-    forwardHeaders:
-      - 'Authorization'
+- Rule:
+    name: "Proxy Rule"
+    when:
+      matchesUris:
+        - uri: ^/foo/.*/bar$
+    then:
+      functionAs: "Proxy"
+      forwardUri: 'http://localhost:4041'
+      forwardHeaders:
+        - 'Authorization'
 ```
 
-2. Any request against `/foo/*anything*/bar/` will be proxied to the server at `localhost:4041`, the `content-type` Header will be returned. Lastly we append another `user` to our response.
+3. Any request against `/foo/*anything*/bar/` will be proxied to the server at `localhost:4041`, the `content-type` Header will be returned. Lastly we append another `user` to our response.
 
 ```yaml
-- Fips: 
-    path: ^/foo/.*/bar/$
-    forwardUri:
-      "http://localhost:4041"
-    backwardHeaders:
-      - "content-type"
-    rules:
-      - path: ">>"
-      {
-        "firstname": "Morty",
-        "lastname": "Smith",
-        "status": "cloned himself"
-      }
+- Rule:
+    name: "Fips Rule"
+    when:
+      matchesUris:
+        - uri: ^/foo/.*/bar$
+    then:
+      functionAs: "Fips"
+      forwardUri: "http://localhost:4041"
+      returnHeaders:
+        - "content-type"
+      modifyResponse:
+        body:
+          - at: ">>"
+            with:
+              firstname: "Morty"
+              lastname: "Smith"
+              status: "cloned himself"
 ```
 
 ## All configuration parameters for each rule type:
 
 Configuration options for the Fips function (Mock and Proxy combination):
 ```yaml
-    # A a regex to match incoming requests. if a match is found, this rule will be applied
-    path: String
+- Rule:
     # This name will be displayed for debugging purposes
     name: String
-    # Sleep for ms
-    sleep: u64
-    # Add these headers to the response
-    headers: HashMap<String, String>,
-    # Only apply a rule if the method matches these
-    matchMethods: Vec<String>
-    # Only apply a rule with this probability. It's best to have a fallback rule defined
-    matchProbability: Option<f32>
-    # Only apply a rule if the request body contains the given string
-    matchBodyContains: Option<String>
-    # Forward any incoming request to this uri and return the response
-    forwardUri: String
-    # Forward matching headers on the request
-    forwardHeaders: Vec<String>
-    # Return these headers from the original response
-    backwardHeaders: Vec<String>,
-    # Set the response status 
-    responseStatus: u16 
-    # Apply these transformations on the response (see rules further below)
-    rules: Vec<Rules>
+    when:
+      # List of URIs to match (regex patterns)
+      matchesUris:
+        - uri: String
+      # Only apply a rule if the method matches these
+      matchMethods: Vec<String>
+      # Only apply a rule if the request body contains the given string
+      matchBodyContains: Option<String>
+    then:
+      functionAs: "Fips"
+      # Forward any incoming request to this uri and return the response
+      forwardUri: String
+      # Forward matching headers on the request
+      forwardHeaders: Vec<String>
+      # Return these headers from the original response
+      returnHeaders: Vec<String>
+      # Set the response status
+      status: String
+      # Add these headers to the response
+      headers: HashMap<String, String>
+      # Apply these transformations on the response
+      modifyResponse:
+        setHeaders: HashMap<String, String>
+        body:
+          - at: String  # json_dotpath location
+            with: Value # json value to insert
+    with:
+      # Sleep for ms
+      sleep: u64
+      # Only apply a rule with this probability. It's best to have a fallback rule defined
+      matchProbability: Option<f32>
+      # Plugin configuration (see plugins section below)
+      plugins: Vec<PluginConfig>
 ```
 Configuration options for the Proxy function:
 ```yaml
-    # A a regex to match incoming requests. if a match is found, this rule will be applied
-    path: String
+- Rule:
     # This name will be displayed for debugging purposes
     name: String
-    # Sleep for ms
-    sleep: u64
-    # Add these headers to the response
-    headers: HashMap<String, String>,
-    # Only apply a rule if the method matches these
-    matchMethods: Vec<String>
-    # Only apply a rule with this probability. It's best to have a fallback rule defined
-    matchProbability: Option<f32>
-    # Only apply a rule if the request body contains the given string
-    matchBodyContains: Option<String>
-    # Forward any incoming request to this uri and return the response
-    forwardUri: String
-    # Forward matching headers on the request
-    forwardHeaders: Vec<String>
-    # Return these headers from the original response
-    backwardHeaders: Vec<String>,
+    when:
+      # List of URIs to match (regex patterns)
+      matchesUris:
+        - uri: String
+      # Only apply a rule if the method matches these
+      matchMethods: Vec<String>
+      # Only apply a rule if the request body contains the given string
+      matchBodyContains: Option<String>
+    then:
+      functionAs: "Proxy"
+      # Forward any incoming request to this uri and return the response
+      forwardUri: String
+      # Forward matching headers on the request
+      forwardHeaders: Vec<String>
+      # Return these headers from the original response
+      returnHeaders: Vec<String>
+      # Add these headers to the response
+      headers: HashMap<String, String>
+    with:
+      # Sleep for ms
+      sleep: u64
+      # Only apply a rule with this probability. It's best to have a fallback rule defined
+      matchProbability: Option<f32>
 ```
 
 Configuration options for the Mock function:
 ```yaml
-    # A a regex to match incoming requests. if a match is found, this rule will be applied
-    path: String
+- Rule:
     # This name will be displayed for debugging purposes
     name: String
-    # Sleep for ms
-    sleep: u64
-    # Add these headers to the response
-    headers: HashMap<String, String>,
-    # Only apply a rule if the method matches these
-    matchMethods: Vec<String>
-    # Only apply a rule with this probability. It's best to have a fallback rule defined
-    matchProbability: Option<f32>
-    # Only apply a rule if the request body contains the given string
-    matchBodyContains: Option<String>
-    # Forward any incoming request to this uri and return the response
-    forwardUri: String
-    # Set the response status 
-    responseStatus: u16 
-    # Add these items to the response body
-    body: Serde<Value>
+    when:
+      # List of URIs to match (regex patterns)
+      matchesUris:
+        - uri: String
+      # Only apply a rule if the method matches these
+      matchMethods: Vec<String>
+      # Only apply a rule if the request body contains the given string
+      matchBodyContains: Option<String>
+    then:
+      functionAs: "Mock"
+      # Add these items to the response body
+      body: Serde<Value>
+      # Set the response status
+      status: String
+      # Add these headers to the response
+      headers: HashMap<String, String>
+    with:
+      # Sleep for ms
+      sleep: u64
+      # Only apply a rule with this probability. It's best to have a fallback rule defined
+      matchProbability: Option<f32>
+      # Plugin configuration (see plugins section below)
+      plugins: Vec<PluginConfig>
 ```
 
 Configuration options to host static files:
 ```yaml
-    # A a regex to match incoming requests. if a match is found, this rule will be applied
-    path: String
+- Rule:
     # This name will be displayed for debugging purposes
     name: String
-    # Sleep for ms
-    sleep: u64
-    # Add these headers to the response
-    headers: HashMap<String, String>,
-    # Only apply a rule if the method matches these
-    matchMethods: Vec<String>
-    # Only apply a rule with this probability. It's best to have a fallback rule defined
-    matchProbability: Option<f32>
-    # Only apply a rule if the request body contains the given string
-    matchBodyContains: Option<String>
-    # host files from this directory
-    staticBaseDir: String
+    when:
+      # List of URIs to match (regex patterns)
+      matchesUris:
+        - uri: String
+      # Only apply a rule if the method matches these
+      matchMethods: Vec<String>
+    then:
+      functionAs: "Static"
+      # host files from this directory
+      baseDir: String
+      # Add these headers to the response
+      headers: HashMap<String, String>
+    with:
+      # Sleep for ms
+      sleep: u64
 ```
 
 
-Rule:
+Body modification rules (used in modifyResponse.body):
 ```yaml
    # The json_dotpath (see more at Object manipulation on the response)
-   path: String,
-   # Any json serializeable item that is added to the response at the paths location
-   item: Serde<Value>
+   at: String
+   # Any json serializeable item that is added to the response at the path location
+   with: Serde<Value>
 ```
 
 
@@ -242,7 +281,7 @@ impl Function for Random {
 fips::export_plugin!(register);
 
 extern "C" fn register(registrar: &mut dyn PluginRegistrar) {
-    registrar.register_function("{{Name}}", Box::new(Random));
+    registrar.register_function("Name", Box::new(Random));
 }
 ```
 
@@ -251,11 +290,20 @@ Above code registers the plugin on the Fips plugin registry.  The plugins `name`
 Example `config.yaml`
 
 ```yaml
-- Mock:
-    path: ^/randomname/$
-    rules:
-        body:
-          foo: '{{Name}}'
+- Rule:
+    name: "Random Name Generator"
+    when:
+      matchesUris:
+        - uri: ^/randomname$
+    then:
+      functionAs: "Mock"
+      body:
+        foo: '{{Name}}'
+      status: "200"
+    with:
+      plugins:
+        - name: "Name"
+          path: './plugins/libname_plugin.so'
 ```
 
 Example output of `curl localhost:8888/randomname/ | jq`
@@ -268,16 +316,24 @@ Example output of `curl localhost:8888/randomname/ | jq`
 }
 ```
 
-Plugins can also be passed arguments via the configuration files. If you wish to do so, the plugin has to be configured as an object in your configuration yaml:
+Plugins can also be passed arguments via the configuration files. If you wish to do so, the plugin has to be configured in the `with` section:
 
 ```yaml
-- Mock:
-    path: ^/randomname/$
-    rules:
-        item:
-          foo:
-            plugin: '{{Name}}',
-            args: [ "foo", 1, "bar" ]
+- Rule:
+    name: "Random Name with Args"
+    when:
+      matchesUris:
+        - uri: ^/randomname$
+    then:
+      functionAs: "Mock"
+      body:
+        foo: '{{Name}}'
+      status: "200"
+    with:
+      plugins:
+        - name: "Name"
+          path: './plugins/libname_plugin.so'
+          args: [ "foo", 1, "bar" ]
 ```
 
 Example output of `curl localhost:8888/randomname/ | jq`
