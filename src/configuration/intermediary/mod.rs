@@ -16,6 +16,7 @@ pub struct Intermediary {
     pub uri: Option<Uri>,
 }
 
+#[allow(async_fn_in_trait)]
 pub trait AsyncTryFrom<T> {
     type Output;
     async fn async_try_from(t: T) -> Result<Self::Output>;

@@ -10,7 +10,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::io;
 
+#[allow(dead_code)]
 pub static CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
+#[allow(dead_code)]
 pub static RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
 pub struct FunctionProxy {

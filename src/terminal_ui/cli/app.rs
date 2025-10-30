@@ -14,7 +14,9 @@ const PLUGINS_TAB_NAME: &str = "Loaded Plugins";
 pub struct App<'a> {
     pub should_quit: bool,
     pub tabs: TabsState<'a>,
+    #[allow(dead_code)]
     pub show_chart: bool,
+    #[allow(dead_code)]
     pub enhanced_graphics: bool,
     pub state: Arc<State>,
     pub opts: CliOptions,

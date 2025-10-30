@@ -55,6 +55,7 @@ pub enum FrontendError {
     GenericFrontend(#[from] std::io::Error),
     #[error("Failed to start frontend due to channel error")]
     Input(#[from] std::sync::mpsc::RecvError),
+    #[allow(dead_code)]
     #[error("unexpected none option")]
     NoneOption,
 }

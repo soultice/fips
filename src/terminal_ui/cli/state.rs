@@ -14,6 +14,7 @@ pub struct State {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MainError {
+    #[allow(dead_code)]
     Other { msg: String },
 }
 

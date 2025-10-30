@@ -21,12 +21,16 @@ pub enum InvocationError {
 }
 
 pub struct PluginDeclaration {
+    #[allow(dead_code)]
     pub rustc_version: &'static str,
+    #[allow(dead_code)]
     pub core_version: &'static str,
+    #[allow(improper_ctypes_definitions)]
     pub register: unsafe extern "C" fn(&mut dyn PluginRegistrar),
 }
 
 pub trait PluginRegistrar {
+    #[allow(dead_code)]
     fn register_function(&mut self, name: &str, function: Box<dyn Function + Send>);
 }
 
