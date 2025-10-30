@@ -9,6 +9,7 @@ use super::ruleset::RuleSet;
 
 #[derive(Error, Debug)]
 pub enum DeserializationError {
+    #[allow(dead_code)]
     #[error("Could not read directory")]
     ReadDirectory(),
     #[error("could not parse regex")]

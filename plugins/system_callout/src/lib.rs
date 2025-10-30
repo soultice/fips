@@ -1,4 +1,4 @@
-use fips::{export_plugin, Function, InvocationError, PluginDeclaration, PluginRegistrar};
+use fips::{export_plugin, Function, InvocationError, PluginRegistrar};
 use serde_json::Value;
 use std::process::Command;
 

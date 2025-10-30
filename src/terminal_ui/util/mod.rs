@@ -1,5 +1,7 @@
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "termion")]
 pub mod event;
+
 mod keybinds;
 pub use keybinds::match_keybinds;
 
@@ -9,7 +11,7 @@ pub struct TabsState<'a> {
 }
 
 impl<'a> TabsState<'a> {
-    pub fn new(titles: Vec<&'a str>) -> TabsState {
+    pub fn new(titles: Vec<&'a str>) -> TabsState<'a> {
         TabsState { titles, index: 0 }
     }
     pub fn next(&mut self) {

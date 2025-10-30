@@ -1,4 +1,4 @@
-/// Integration tests for configuration loading and rule parsing
+//! Integration tests for configuration loading and rule parsing
 
 mod common;
 

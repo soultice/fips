@@ -59,16 +59,22 @@ else
     exit 1
 fi
 
+# Copy plugin to _plugins directory
+mkdir -p "$PROJECT_ROOT/_plugins"
+cp "$PLUGIN_PATH" "$PROJECT_ROOT/_plugins/"
+echo -e "${GREEN}✓ Plugin copied to _plugins directory${NC}"
+
 echo ""
 echo -e "${BLUE}Step 2: Starting FIPS server (in background)...${NC}"
 cd "$PROJECT_ROOT"
 
 # Kill any existing FIPS instances
+pkill -f "target/release/fips" 2>/dev/null || true
 pkill -f "target/debug/fips" 2>/dev/null || true
 sleep 1
 
-# Start FIPS
-cargo run -- -c ./nconfig-test/ > /tmp/fips-demo.log 2>&1 &
+# Start FIPS in release mode
+cargo run --release -- -c ./nconfig-test/ > /tmp/fips-demo.log 2>&1 &
 FIPS_PID=$!
 
 echo -e "${GREEN}✓ FIPS started (PID: $FIPS_PID)${NC}"

@@ -1,4 +1,4 @@
-/// Tests for rule matching logic
+//! Tests for rule matching logic
 
 mod common;
 

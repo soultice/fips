@@ -1,4 +1,4 @@
-/// Tests for plugin system functionality
+//! Tests for plugin system functionality
 
 mod common;
 
@@ -28,6 +28,7 @@ fn test_plugin_invocation_error_types() {
 
 // Mock plugin function for testing
 struct MockFunction {
+    #[allow(dead_code)]
     name: String,
 }
 
@@ -37,7 +38,7 @@ impl fips::Function for MockFunction {
             if arr.is_empty() {
                 return Ok("default".to_string());
             }
-            if let Some(Value::String(s)) = arr.get(0) {
+            if let Some(Value::String(s)) = arr.first() {
                 return Ok(format!("processed_{}", s));
             }
         }

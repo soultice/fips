@@ -1,4 +1,4 @@
-/// Common test utilities and helpers
+//! Common test utilities and helpers
 
 use bytes::Bytes;
 use http::{HeaderMap, Method, StatusCode, Uri};
@@ -7,6 +7,7 @@ use hyper::{Request, Response};
 use serde_json::json;
 
 /// Create a test intermediary with common defaults
+#[allow(dead_code)]
 pub fn create_test_intermediary() -> fips::configuration::intermediary::Intermediary {
     fips::configuration::intermediary::Intermediary {
         status: StatusCode::OK,
@@ -18,6 +19,7 @@ pub fn create_test_intermediary() -> fips::configuration::intermediary::Intermed
 }
 
 /// Create a test HTTP request
+#[allow(dead_code)]
 pub fn create_test_request(uri: &str, method: Method, body: &str) -> Request<Full<Bytes>> {
     Request::builder()
         .uri(uri)
@@ -28,6 +30,7 @@ pub fn create_test_request(uri: &str, method: Method, body: &str) -> Request<Ful
 }
 
 /// Create a test HTTP response
+#[allow(dead_code)]
 pub fn create_test_response(status: StatusCode, body: &str) -> Response<Full<Bytes>> {
     Response::builder()
         .status(status)
@@ -37,6 +40,7 @@ pub fn create_test_response(status: StatusCode, body: &str) -> Response<Full<Byt
 }
 
 /// Load test configuration from nconfig-test directory
+#[allow(dead_code)]
 pub fn get_test_config_path() -> std::path::PathBuf {
     std::path::PathBuf::from("./nconfig-test")
 }

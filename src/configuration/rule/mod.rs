@@ -52,10 +52,10 @@ impl Rule {
         }
 
         let some_methods_match =
-            self.when.matches_methods.as_ref().map_or(true, |methods| {
+            self.when.matches_methods.as_ref().is_none_or(|methods| {
                 methods
                     .iter()
-                    .any(|m| intermediary.method.as_ref().map_or(false, |method| m == method.as_str()))
+                    .any(|m| intermediary.method.as_ref().is_some_and(|method| m == method.as_str()))
             });
 
         if !some_methods_match {
@@ -66,7 +66,7 @@ impl Rule {
             self.when
                 .body_contains
                 .as_ref()
-                .map_or(true, |body_contains| {
+                .is_none_or(|body_contains| {
                     // Convert body to string and check if it contains the pattern
                     let body_str = intermediary.body.to_string();
                     body_str.contains(body_contains)

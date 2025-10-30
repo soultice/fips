@@ -1,4 +1,4 @@
-/// Integration test: Full end-to-end server testing
+//! Integration test: Full end-to-end server testing
 
 mod common;
 
