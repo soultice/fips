@@ -75,7 +75,6 @@ pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Ve
         .iter()
         .map(|x| match x {
             PrintInfo::Plain(info) => Spans::from(info.clone()),
-            PrintInfo::Fips(info) => Spans::from(info),
         })
         .collect();
 

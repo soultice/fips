@@ -16,10 +16,9 @@ pub struct Intermediary {
     pub uri: Option<Uri>,
 }
 
-#[allow(async_fn_in_trait)]
 pub trait AsyncTryFrom<T> {
     type Output;
-    async fn async_try_from(t: T) -> Result<Self::Output>;
+    fn async_try_from(t: T) -> impl std::future::Future<Output = Result<Self::Output>> + Send;
 }
 
 impl AsyncTryFrom<hyper::Response<Incoming>> for Intermediary {

@@ -12,6 +12,7 @@ repository = "https://github.com/soultice/fips"
 [features]
 logging = []
 ui = []
+termion = []
 default = ['ui']
 
 [dependencies]

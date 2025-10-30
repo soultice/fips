@@ -29,8 +29,7 @@ pub async fn match_keybinds(
                 app.state
                     .add_message(PrintInfo::Plain(String::from(
                         "Config files reloaded",
-                    )))
-                    .unwrap_or_default();
+                    )));
             }
             key!(c) => {
                 *app.state.messages.lock().unwrap() = Vec::new();

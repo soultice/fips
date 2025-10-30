@@ -12,33 +12,25 @@ pub struct State {
     pub traffic_info: Mutex<Vec<LoggableNT>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum MainError {
-    #[allow(dead_code)]
-    Other { msg: String },
-}
-
 impl State {
     pub fn add_traffic_info(
         &self,
         traffic_info: LoggableNT,
-    ) -> Result<(), MainError> {
+    ) {
         if let Ok(mut traffic) = self.traffic_info.lock() {
             traffic.insert(0, traffic_info);
             if traffic.len() > 20 {
                 traffic.pop();
             }
         }
-        Ok(())
     }
 
-    pub fn add_message(&self, message: PrintInfo) -> Result<(), MainError> {
+    pub fn add_message(&self, message: PrintInfo) {
         if let Ok(mut messages) = self.messages.lock() {
             messages.insert(0, message);
             if messages.len() > 200 {
                 messages.pop();
             }
         }
-        Ok(())
     }
 }

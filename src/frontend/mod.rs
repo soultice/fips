@@ -55,9 +55,6 @@ pub enum FrontendError {
     GenericFrontend(#[from] std::io::Error),
     #[error("Failed to start frontend due to channel error")]
     Input(#[from] std::sync::mpsc::RecvError),
-    #[allow(dead_code)]
-    #[error("unexpected none option")]
-    NoneOption,
 }
 
 pub async fn spawn_frontend(
@@ -104,8 +101,7 @@ pub async fn spawn_frontend(
         Box::new(move |panic_info| {
             log::error!("Panic: {}", panic_info);
             captured_state
-                .add_message(PrintInfo::Plain(panic_info.to_string()))
-                .unwrap();
+                .add_message(PrintInfo::Plain(panic_info.to_string()));
         })
     });
 
@@ -175,34 +171,29 @@ pub fn define_log_callbacks(state: Arc<State>) -> PaintLogsCallbacks {
             inner_state
                 .add_traffic_info(LoggableNT(
                     LoggableType::IncomingRequestAtFfips(i.clone()),
-                ))
-                .unwrap();
+                ));
         }
         LoggableType::OutGoingResponseFromFips(i) => {
             inner_state
                 .add_traffic_info(LoggableNT(
                     LoggableType::OutGoingResponseFromFips(i.clone()),
-                ))
-                .unwrap();
+                ));
         }
         LoggableType::OutgoingRequestToServer(i) => {
             inner_state
                 .add_traffic_info(LoggableNT(
                     LoggableType::OutgoingRequestToServer(i.clone()),
-                ))
-                .unwrap();
+                ));
         }
         LoggableType::IncomingResponseFromServer(i) => {
             inner_state
                 .add_traffic_info(LoggableNT(
                     LoggableType::IncomingResponseFromServer(i.clone()),
-                ))
-                .unwrap();
+                ));
         }
         LoggableType::Plain => {
             inner_state
-                .add_message(PrintInfo::Plain(message.message.clone()))
-                .unwrap();
+                .add_message(PrintInfo::Plain(message.message.clone()));
         }
     });
     PaintLogsCallbacks(log)
