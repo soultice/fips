@@ -17,6 +17,8 @@ use eyre::{Context, ContextCompat, Result};
 pub struct RuleAndIntermediaryHolder {
     pub rule: Rule,
     pub intermediary: Intermediary,
+    #[cfg(feature = "logging")]
+    pub correlation_id: u64,
 }
 
 impl RuleAndIntermediaryHolder {
@@ -120,22 +122,32 @@ impl TryFrom<&RuleAndIntermediaryHolder> for Request<Full<Bytes>> {
                 forward_uri,
                 modify_response: _,
             } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] building forwarding request THEN=Fips forward_uri='{}' rule='{}'", holder.correlation_id, forward_uri, holder.rule.name);
                 builder = builder.uri(Uri::from_str(forward_uri)?);
             }
             Then::Proxy {
                 forward_uri,
                 modify_response: _,
             } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] building forwarding request THEN=Proxy forward_uri='{}' rule='{}'", holder.correlation_id, forward_uri, holder.rule.name);
                 builder = builder.uri(Uri::from_str(forward_uri)?);
             }
-            Then::Static { static_base_dir: _ } => {
+            Then::Static { static_base_dir: _, strip_path: _ } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] request conversion aborted THEN=Static rule='{}' (not forwarding)", holder.correlation_id, holder.rule.name);
                 return Err(ConfigurationError::NotForwarding);
             }
             Then::Mock {
                 body: _,
                 status: _,
                 headers: _,
-            } => return Err(ConfigurationError::NotForwarding),
+            } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] request conversion aborted THEN=Mock rule='{}' (not forwarding)", holder.correlation_id, holder.rule.name);
+                return Err(ConfigurationError::NotForwarding)
+            },
         };
         builder = builder.method(
             holder
@@ -173,6 +185,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                 forward_uri: _,
                 modify_response,
             } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] building response THEN=Fips rule='{}'", holder.correlation_id, holder.rule.name);
                 if let Some(modify) = modify_response {
                     if let Some(status) = &modify.status {
                         builder = builder
@@ -212,6 +226,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                 status,
                 headers,
             } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] building response THEN=Mock rule='{}' status='{:?}'", holder.correlation_id, holder.rule.name, status);
                 if let Some(status) = status {
                     builder =
                         builder.status(hyper::StatusCode::from_str(status)?);
@@ -235,6 +251,8 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                 forward_uri: _,
                 modify_response,
             } => {
+                #[cfg(feature = "logging")]
+                log::info!("[cid={}] [holder] building response THEN=Proxy rule='{}'", holder.correlation_id, holder.rule.name);
                 if let Some(modify_response) = modify_response {
                     if let Some(status) = &modify_response.status {
                         builder = builder
@@ -260,12 +278,33 @@ impl AsyncTryFrom<RuleAndIntermediaryHolder> for Response<Full<Bytes>> {
                 }
             }
             //nothing
-            Then::Static { static_base_dir } => {
+            Then::Static { static_base_dir, strip_path } => {
                 if let Some(path) = static_base_dir {
+                    #[cfg(feature = "logging")]
+                    log::info!("[cid={}] [holder] serving static THEN=Static rule='{}' base_dir='{}' strip_path={} ", holder.correlation_id, holder.rule.name, path, strip_path);
                     // Build a fake request to use with hyper-staticfile
+                    let original_uri = holder.intermediary.uri.as_ref().wrap_err("could not retrieve uri")?;
+                    let effective_uri = if *strip_path {
+                        // Extract just the final segment (filename) from the path
+                        let path_str = original_uri.path();
+                        let filename = path_str.rsplit('/').next().unwrap_or(path_str);
+                        // Reconstruct URI with leading slash and filename only, preserving query if any
+                        let mut new_path = String::from("/");
+                        new_path.push_str(filename);
+                        let rebuilt = if let Some(query) = original_uri.query() {
+                            format!("{}?{}", new_path, query)
+                        } else {
+                            new_path
+                        };
+                        #[cfg(feature = "logging")]
+                        log::debug!("[cid={}] [holder] static strip applied original='{}' effective='{}'", holder.correlation_id, original_uri, rebuilt);
+                        Uri::from_str(&rebuilt)?
+                    } else {
+                        original_uri.clone()
+                    };
                     let fake_request = Request::builder()
                         .method(holder.intermediary.method.as_ref().wrap_err("could not retrieve method")?)
-                        .uri(holder.intermediary.uri.as_ref().wrap_err("could not retrieve uri")?)
+                        .uri(effective_uri)
                         .body(Full::new(Bytes::new()))?;
                     
                     let resp = hyper_staticfile::Static::new(std::path::Path::new(path))

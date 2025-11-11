@@ -62,35 +62,47 @@ impl YamlFileLoader {
         }
     }
 
-    pub fn load_from_directories(
+    pub fn load_from_directories_with_errors(
         &self,
         directories: &[PathBuf],
-    ) -> Result<Vec<RuleSet>, DeserializationError> {
+    ) -> (Vec<RuleSet>, Vec<(String, String)>) {
         let mut dir_contents: Vec<RuleSet> = Vec::new();
+        let mut errors: Vec<(String, String)> = Vec::new();
 
         let mut all_files = Vec::new();
         for p in directories {
-            let dir_entries = fs::read_dir(p)?;
-            for entry in dir_entries {
-                all_files.push(entry?);
+            let read_dir = fs::read_dir(p);
+            match read_dir {
+                Ok(dir_entries) => {
+                    for entry in dir_entries.flatten() {
+                        all_files.push(entry);
+                    }
+                }
+                Err(e) => {
+                    errors.push((p.to_string_lossy().to_string(), format!("ReadDirectory: {}", e)));
+                }
             }
         }
 
         all_files.sort_by_key(|f| f.path());
 
         for file in all_files {
+            let path_str = file.path().to_string_lossy().to_string();
             match self.deserialize_file(Ok(file)) {
                 Ok(rules) => {
                     log::info!("deserialized rules: {:?}", rules);
                     dir_contents.extend(rules);
                 }
                 Err(DeserializationError::ForbiddenExtension) => {
-                    // Skip files with wrong extension
+                    // Skip files with wrong extension silently
                     continue;
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    log::error!("PARSE_ERROR file='{}' error='{}'", path_str, e);
+                    errors.push((path_str, format!("{}", e)));
+                }
             }
         }
-        Ok(dir_contents)
+        (dir_contents, errors)
     }
 }

@@ -39,7 +39,13 @@ pub async fn routes(
     configuration: Arc<AsyncMutex<Config>>,
     logging: &Arc<PaintLogsCallbacks>,
 ) -> Result<Response<Full<Bytes>>> {
-    let requestinfo = RequestInfo::from(&req);
+    // Generate correlation ID for this incoming request
+    #[cfg(feature = "logging")]
+    let correlation_id = crate::utility::log::next_correlation_id();
+    #[cfg(not(feature = "logging"))]
+    let correlation_id = 0; // fallback when logging disabled
+
+    let requestinfo = RequestInfo::from_with_id(&req, correlation_id);
 
     let log_output = Loggable {
         message_type: LoggableType::IncomingRequestAtFfips(requestinfo),
@@ -67,13 +73,23 @@ pub async fn routes(
     let matching_rule_idx =
         config.rules.iter().enumerate().find_map(|(idx, rule)| {
             if !config.active_rule_indices.contains(&idx) {
-                None
-            } else {
-                match rule {
-                    RuleSet::Rule(rule) => {
-                        if rule.should_apply(&intermediary).is_ok() {
+                #[cfg(feature = "logging")]
+                log::trace!("[cid={}] [routes] skipping rule index={} (inactive)", correlation_id, idx);
+                return None;
+            }
+            match rule {
+                RuleSet::Rule(rule) => {
+                    #[cfg(feature = "logging")]
+                    log::debug!("[cid={}] [routes] evaluating rule index={} name='{}'", correlation_id, idx, rule.name);
+                    match rule.should_apply(&intermediary) {
+                        Ok(_) => {
+                            #[cfg(feature = "logging")]
+                            log::info!("[cid={}] [routes] rule MATCH index={} name='{}'", correlation_id, idx, rule.name);
                             Some(idx)
-                        } else {
+                        }
+                        Err(e) => {
+                            #[cfg(feature = "logging")]
+                            log::trace!("[cid={}] [routes] rule NO MATCH index={} name='{}' reason='{}'", correlation_id, idx, rule.name, e);
                             None
                         }
                     }
@@ -89,15 +105,17 @@ pub async fn routes(
 
         let rule = config_clone.rules[idx].into_inner();
         drop(config_guard);
-        let mut holder = RuleAndIntermediaryHolder { rule: rule.clone(), intermediary };
+        let mut holder = RuleAndIntermediaryHolder { rule: rule.clone(), intermediary, #[cfg(feature = "logging")] correlation_id };
 
         let info = Loggable {
             message_type: LoggableType::Plain,
             message: format!(
-                "Applying Rule {} {} {} ",
+                "[cid={}] Applying Rule {} {} {} (index={})", // enriched message
+                correlation_id,
                 holder.rule.name,
                 holder.intermediary.method.clone().unwrap(),
-                holder.intermediary.uri.clone().unwrap()
+                holder.intermediary.uri.clone().unwrap(),
+                idx
             ),
         };
         (logging.0)(&info);
@@ -106,7 +124,7 @@ pub async fn routes(
 
         // Rule is forwarding (Proxy/FIPS)
         let resp = if let Ok(request) = request {
-            let requestinfo = RequestInfo::from(&request);
+            let requestinfo = RequestInfo::from_with_id(&request, correlation_id);
             let log_output = Loggable {
                 message_type: LoggableType::OutgoingRequestToServer(
                     requestinfo,
@@ -118,7 +136,7 @@ pub async fn routes(
             let client = Client::builder(TokioExecutor::new()).build_http();
             let resp = client.request(request).await?;
 
-            let responseinfo = ResponseInfo::from(&resp);
+            let responseinfo = ResponseInfo::from_with_id(&resp, correlation_id);
             let log_output = Loggable {
                 message_type: LoggableType::OutGoingResponseFromFips(
                     responseinfo,

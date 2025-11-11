@@ -22,6 +22,9 @@ pub enum Then {
     Static {
         #[serde(rename = "baseDir")]
         static_base_dir: Option<String>,
+        #[serde(rename = "stripPath")]
+        #[serde(default)]
+        strip_path: bool,
     },
     Mock {
         body: Option<Value>,
@@ -93,12 +96,14 @@ forwardUri: "http://localhost:9090"
         let yaml = r#"
 functionAs: Static
 baseDir: "./static"
+stripPath: true
 "#;
         let then: Result<Then, _> = serde_yaml::from_str(yaml);
         assert!(then.is_ok());
         
-        if let Then::Static { static_base_dir } = then.unwrap() {
+        if let Then::Static { static_base_dir, strip_path } = then.unwrap() {
             assert_eq!(static_base_dir.as_ref().unwrap(), "./static");
+            assert!(strip_path);
         } else {
             panic!("Expected Static variant");
         }

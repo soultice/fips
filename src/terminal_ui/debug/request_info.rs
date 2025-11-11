@@ -24,13 +24,14 @@ impl<B> From<&Request<B>> for RequestInfoNT {
             uri,
             version,
             headers,
+            correlation_id: 0, // UI-created without correlation context
         })
     }
 }
 
 impl<'a> From<&RequestInfoNT> for Text<'a> {
     fn from(request_info: &RequestInfoNT) -> Text<'a> {
-        let mut text = String::from(&request_info.0.method);
+        let mut text = format!("[cid={}] {}", request_info.0.correlation_id, request_info.0.method);
         text.push(' ');
         text.push_str(&request_info.0.uri);
         text.push(' ');

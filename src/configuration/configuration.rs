@@ -105,6 +105,8 @@ pub struct Config {
     pub active_rule_indices: Vec<usize>,
     pub fe_selected_rule: usize,
     pub rules: Vec<RuleSet>,
+    #[cfg(feature = "logging")]
+    pub parse_errors: Vec<(String, String)>, // (path, error)
 }
 
 impl Default for Config {
@@ -131,10 +133,13 @@ impl Default for Config {
                             .into_string()
                             .unwrap(),
                     ),
+                    strip_path: false,
                 },
                 with: None,
                 path: String::from(""),
             })],
+            #[cfg(feature = "logging")]
+            parse_errors: vec![],
         }
     }
 }
@@ -143,10 +148,13 @@ impl Config {
     pub fn load(paths: &[PathBuf]) -> Result<Config, DeserializationError> {
         let extensions = vec![String::from("yaml"), String::from("yml")];
         let loader = YamlFileLoader { extensions };
-        let mut rules = loader.load_from_directories(paths)?;
+        let (mut rules, _errors) = loader.load_from_directories_with_errors(paths);
 
         if rules.is_empty() {
-            return Ok(Config::default());
+            let cfg = Config::default();
+            #[cfg(feature = "logging")]
+            { cfg.parse_errors = _errors; }
+            return Ok(cfg);
         }
 
         //load plugins
@@ -175,12 +183,23 @@ impl Config {
                 }
             }
         }
-        Ok(Config {
-            //all rules are active initially
-            active_rule_indices: (0..rules.len()).collect(),
-            fe_selected_rule: 0,
-            rules,
-        })
+        #[cfg(feature = "logging")]
+        {
+            return Ok(Config {
+                active_rule_indices: (0..rules.len()).collect(),
+                fe_selected_rule: 0,
+                rules,
+                parse_errors: _errors,
+            });
+        }
+        #[cfg(not(feature = "logging"))]
+        {
+            return Ok(Config {
+                active_rule_indices: (0..rules.len()).collect(),
+                fe_selected_rule: 0,
+                rules,
+            });
+        }
     }
 
     pub fn reload(&mut self, paths: &[PathBuf]) -> Result<()> {
@@ -190,6 +209,10 @@ impl Config {
                 self.rules = new_config.rules;
                 self.active_rule_indices = new_config.active_rule_indices;
                 self.fe_selected_rule = new_config.fe_selected_rule;
+                #[cfg(feature = "logging")]
+                {
+                    self.parse_errors = new_config.parse_errors;
+                }
                 Ok(())
             }
             Err(e) => Err(eyre!("Error reloading config: {e:?}")),

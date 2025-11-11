@@ -1,6 +1,15 @@
 // Type definitions for logging, implementation is left to the respective crates
 use std::collections::HashMap;
 use hyper::{Response, Request};
+use std::sync::atomic::{AtomicU64, Ordering};
+use once_cell::sync::Lazy;
+
+// Global atomic counter for correlation IDs (simple, fast). Could be replaced by UUID if needed.
+static CORRELATION_COUNTER: Lazy<AtomicU64> = Lazy::new(|| AtomicU64::new(1));
+
+pub fn next_correlation_id() -> u64 {
+    CORRELATION_COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Debug, Clone)]
 pub struct RequestInfo {
@@ -9,10 +18,11 @@ pub struct RequestInfo {
     pub uri: String,
     pub version: String,
     pub headers: HashMap<String, String>,
+    pub correlation_id: u64,
 }
 
-impl<B> From<&Request<B>> for RequestInfo {
-    fn from(request: &Request<B>) -> RequestInfo {
+impl RequestInfo {
+    pub fn from_with_id<B>(request: &Request<B>, correlation_id: u64) -> RequestInfo {
         let method = String::from(request.method().as_str());
         let uri = request.uri().to_string();
         let version = format!("{:?}", request.version());
@@ -29,6 +39,7 @@ impl<B> From<&Request<B>> for RequestInfo {
             uri,
             version,
             headers,
+            correlation_id,
         }
     }
 }
@@ -39,10 +50,11 @@ pub struct ResponseInfo {
     pub status: String,
     pub version: String,
     pub headers: HashMap<String, String>,
+    pub correlation_id: u64,
 }
 
-impl<B> From<&Response<B>> for ResponseInfo {
-    fn from(response: &Response<B>) -> ResponseInfo {
+impl ResponseInfo {
+    pub fn from_with_id<B>(response: &Response<B>, correlation_id: u64) -> ResponseInfo {
         let status = String::from(response.status().as_str());
         let version = format!("{:?}", response.version());
         let mut headers = HashMap::new();
@@ -57,6 +69,7 @@ impl<B> From<&Response<B>> for ResponseInfo {
             status,
             version,
             headers,
+            correlation_id,
         }
     }
 }

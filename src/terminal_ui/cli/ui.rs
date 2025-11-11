@@ -16,11 +16,14 @@ use super::gradient_newtype::NewGradient;
 use super::{state::State, App};
 
 pub fn draw<B: Backend>(f: &mut Frame<'_, B>, app: &mut App<'_>, all_plugins: Vec<Spans<'_>>, rules_list: List<'_>) {
+    let config_paths = app.opts.config.iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
     let app_title = format!(
         "Fips──live on {} 😌, using config path: {}",
         app.opts.port,
-        "not yet implemented" //
-        //app.opts.config.clone().to_str().unwrap()
+        config_paths
     );
 
     let gradient = colorgrad::CustomGradient::new()

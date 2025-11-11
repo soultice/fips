@@ -1,0 +1,9 @@
+- Rule:
+    name: "Strip static example"
+    when:
+      matches:
+        - uri: ".*"
+    then:
+      functionAs: Static
+      baseDir: "./examples/static"  # ensure directory exists with files
+      stripPath: true

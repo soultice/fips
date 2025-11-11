@@ -22,7 +22,7 @@ impl<'a> AsyncFrom<ConfigurationNewtype> for List<'a> {
     type Output = List<'a>;
     async fn async_from(wrapper: ConfigurationNewtype) -> List<'a> {
         let configuration = wrapper.0.lock().await;
-        let items: Vec<ListItem> = configuration
+        let mut items: Vec<ListItem> = configuration
             .rules
             .iter()
             .enumerate()
@@ -51,6 +51,17 @@ impl<'a> AsyncFrom<ConfigurationNewtype> for List<'a> {
                 )
             })
             .collect();
+
+        #[cfg(feature = "logging")]
+        for (path, err) in &configuration.parse_errors {
+            let mut lines: Vec<Spans> = vec![];
+            lines.push(Spans::from(format!("ERROR parsing file")));
+            lines.push(Spans::from(format!("path: {}", path)));
+            // truncate error if very long
+            let display_err = if err.len() > 120 { format!("{}...", &err[..117]) } else { err.clone() };
+            lines.push(Spans::from(format!("reason: {}", display_err)));
+            items.push(ListItem::new(lines).style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
+        }
         List::new(items).style(Style::default())
     }
 }

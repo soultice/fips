@@ -34,18 +34,18 @@ pub struct PaintLogsCallbacks(LogFunction);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli_options = CliOptions::parse();
+
     #[cfg(feature = "logging")]
     {
         logging::init()?;
-        log::info!("Starting FIPS");
+        log::info!("Starting FIPS on port {} with config paths: {:?}", cli_options.port, cli_options.config);
         std::panic::set_hook({
             Box::new(|e| {
                 log::error!("Panic: {}", e);
             })
         });
     }
-
-    let cli_options = CliOptions::parse();
 
     if cli_options.write_schema {
         let schema = schemars::schema_for!(Vec<RuleSet>);
@@ -87,7 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(not(feature = "ui"))]
     {
-        println!("server is running");
+        println!("FIPS server running on http://127.0.0.1:{}", cli_options.port);
+        println!("Config paths: {:?}", cli_options.config);
         _rt_handle.await?.unwrap();
     }
 
